@@ -6,7 +6,7 @@ const products = [
             { name: "Red", hex: "#FF0000" },
             { name: "Black", hex: "#000000" }
         ],
-        price: 3400,
+        price: 150,
         description: 'ელეგანტური საღამოს კაბა.',
         category: 'clothing',
         designer: 'Natia Tkhelidze',
@@ -17,7 +17,7 @@ const products = [
     {
         name: 'Double-breasted Wool Coat2',
         slug: 'wool-coat-black2',
-        price: 5200, // აქ 2 გეწერა, შევასწორე ლოგიკურად
+        price: 120, // აქ 2 გეწერა, შევასწორე ლოგიკურად
         description: 'კლასიკური შავი პალტო.',
         category: 'clothing',
         designer: 'Natia Tkhelidze',
@@ -29,7 +29,7 @@ const products = [
     {
         name: 'Crystal-embellished Gown20',
         slug: 'crystal-gown20',
-        price: 8500,
+        price: 85,
         description: 'ბრწყინვალე კაბა.',
         category: 'clothing',
         designer: 'Natia Tkhelidze',

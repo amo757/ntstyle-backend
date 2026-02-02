@@ -1,121 +1,95 @@
 import express from 'express';
-import axios from 'axios';
 import nodemailer from 'nodemailer';
-
-// ⚠️ Models-ის იმპორტი
+import Stripe from 'stripe';
 import Order from '../models/orderModel.js'; 
-import User from '../models/UserModel.js';
+import User from '../models/UserModel.js';   
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const router = express.Router();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// --- 🛑 Email Sender Utility (ამისთვის საჭიროა .env ფაილში EMAIL_HOST, EMAIL_USER, EMAIL_PASS) ---
+// --- მეილის ფუნქცია ---
 const sendOrderNotification = async (order, userEmail) => {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
+
     const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: process.env.EMAIL_PORT,
-        secure: false, 
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
+        service: 'gmail',
+        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
 
-    const itemsList = order.orderItems.map(item => 
-        `- ${item.name} (${item.size || 'N/A'}, Qty: ${item.quantity}) - ${item.price} GEL`
-    ).join('\n');
-    
-    // ადმინისთვის გასაგზავნი მეილი
+    const itemsListHtml = order.orderItems.map(item => 
+        `<li><b>${item.name}</b> - Qty: ${item.quantity} - ${item.price} GEL</li>`
+    ).join('');
+
     const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: process.env.ADMIN_EMAIL_RECEIVER || process.env.EMAIL_USER, 
-        subject: `[NTStyle] NEW ORDER #${order._id.toString().slice(-6)} - Total: ${order.totalPrice} GEL`,
-        text: `--- NEW ORDER CONFIRMED ---\n\n` +
-              `CLIENT: ${order.shippingAddress.fullName} (Email: ${userEmail})\n` +
-              `PHONE: ${order.shippingAddress.phoneNumber}\n` +
-              `ADDRESS: ${order.shippingAddress.address}, ${order.shippingAddress.city}, ${order.shippingAddress.postalCode}\n` +
-              `\n--- ITEMS ---\n${itemsList}\n` +
-              `\nTOTAL: ${order.totalPrice.toFixed(2)} GEL (Paid via ${order.paymentMethod})\n` +
-              `STATUS: Payment Verified. Ready for Delivery.`,
+        from: `"N.T.Style" <${process.env.EMAIL_USER}>`,
+        to: userEmail,
+        subject: `✅ Order Confirmed: #${order._id.toString().slice(-6)}`,
+        html: `<h2>Order Confirmed!</h2><p>Total: ${order.totalPrice} GEL</p><ul>${itemsListHtml}</ul>`
     };
 
-    try {
-        await transporter.sendMail(mailOptions);
-        console.log("🔔 Admin Notification Email Sent.");
-    } catch (error) {
-        console.error("❌ Failed to send admin email:", error.message);
-    }
+    try { await transporter.sendMail(mailOptions); } catch (e) { console.error(e); }
 };
 
+// 👇👇👇 აქ შევცვალეთ სახელი /charge-დან /create-payment-intent-ზე
+router.post('/create-payment-intent', async (req, res) => {
+    try {
+        const { 
+            userId, 
+            amount,     
+            token,      
+            orderItems, 
+            shippingAddress 
+        } = req.body; 
 
-// @route POST /api/payment/charge
-// @desc  გადახდის პროცესი, შეკვეთის შენახვა და ადმინის ინფორმირება
-router.post('/charge', async (req, res) => {
-    // ⚠️ Security Note: userId should come from JWT (req.user._id), not req.body
-    const { 
-        userId, // Temporarily taken from body for demo
-        amount, 
-        paymentToken, // Token from Payment Gateway (e.g., TBC Pay)
-        orderItems, 
-        shippingAddress, 
-        paymentMethod
-    } = req.body; 
-
-    // 🛑 აქ უნდა იყოს Gateway-სთან დაკავშირების რეალური ლოგიკა
-    const paymentSuccess = true; // ⚠️ დროებით ვთვლით, რომ გადახდა წარმატებულია
-
-    
-
-    if (!userId || !shippingAddress || orderItems.length === 0) {
-        return res.status(400).json({ message: "Order details missing." });
-    }
-
-    if (paymentSuccess) {
-        try {
-            // 1. Order-ის შექმნა (Persistence)
-            const user = await User.findById(userId);
-            
-            const newOrder = await Order.create({
-                user: userId,
-                orderItems: orderItems,
-                shippingAddress: {
-                    // სრული სახელი შეგვიძლია აქ შევქმნათ
-                    fullName: `${shippingAddress.firstName} ${shippingAddress.lastName}`,
-                    address: shippingAddress.address,
-                    city: shippingAddress.city,
-                    postalCode: shippingAddress.zip,
-                    country: shippingAddress.country,
-                    phoneNumber: shippingAddress.phone,
-                },
-                paymentMethod: paymentMethod,
-                itemsPrice: amount,
-                shippingPrice: 0,
-                totalPrice: amount, 
-                isPaid: true,
-                paidAt: Date.now(),
-            });
-            
-            // 2. ადმინის ინფორმირება Email-ით
-            if (user) {
-                sendOrderNotification(newOrder, user.email);
-            }
-
-            // 3. წარმატების დაბრუნება (ფრონტენდს შეკვეთის ID-ის მისაცემად)
-            res.status(201).json({ 
-                success: true, 
-                message: "Order placed successfully.",
-                orderId: newOrder._id
-            });
-            
-        } catch (error) {
-            console.error("❌ ORDER SAVE ERROR:", error);
-            res.status(500).json({ message: "Failed to save order to database." });
+        // 1. ვალიდაცია
+        if (!userId || !shippingAddress || !orderItems) {
+            return res.status(400).json({ message: "Incomplete data from Frontend" });
         }
 
-    } else {
-        // თუ Gateway-მ უარყო გადახდა
-        res.status(402).json({ success: false, message: "Payment authorization failed." });
+        // 2. --- თანხის ჩამოჭრა ---
+        const charge = await stripe.charges.create({
+            amount: Math.round(amount * 100), // თეთრებში
+            currency: 'gel',
+            source: token.id,
+            description: `Order by user: ${userId}`,
+            receipt_email: token.email
+        });
+
+        console.log("💰 Payment Successful:", charge.id);
+
+        // 3. შეკვეთის შენახვა
+        const newOrder = await Order.create({
+            user: userId,
+            orderItems: orderItems.map(item => ({...item, product: item._id})),
+            shippingAddress,
+            paymentMethod: "Stripe Card",
+            itemsPrice: amount,
+            totalPrice: amount, 
+            isPaid: true,
+            paidAt: Date.now(),
+            paymentResult: { 
+                id: charge.id,
+                status: charge.status,
+                email_address: charge.receipt_email,
+            },
+        });
+
+        // 4. მეილის გაგზავნა
+        const user = await User.findById(userId);
+        if (user) await sendOrderNotification(newOrder, user.email);
+
+        res.status(201).json({ success: true, orderId: newOrder._id });
+
+    } catch (error) {
+        console.error("❌ Payment Failed:", error);
+        res.status(400).json({ 
+            message: "Payment Failed", 
+            error: error.message 
+        });
     }
 });
 
-// ⚠️ აუცილებელია, რომ ეს მარშრუტი დაამატოთ server.js-ში: app.use('/api/payment', paymentRoutes);
 export default router;

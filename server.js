@@ -5,92 +5,99 @@ import { createServer } from 'http';
 import { Server } from 'socket.io'; 
 import cors from 'cors';
 
-// როუტერების იმპორტი
+// ---------------------------------------------------------
+// 1. როუტერების იმპორტი
+// ---------------------------------------------------------
 import productRoutes from './routes/productRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js'; 
 import userRoutes from './routes/userRoutes.js';
-import paymentRoutes from './routes/paymentRoutes.js';
+import newsletterRoutes from './routes/newsletterRoutes.js';
+import orderRoutes from './routes/orderRoutes.js'; // <--- ✅ 1. დაემატა შეკვეთის როუტერი
 
 // გარემოს ცვლადების ჩატვირთვა
-dotenv.config(); // ლოკალურად .env-დან წაიკითხავს, Render-ზე კი სისტემიდან
+dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
-
-// Render ავტომატურად მოგცემს პორტს, ან გამოიყენებს 5000-ს
 const port = process.env.PORT || 5000;
 
 // ---------------------------------------------------------
-// 1. CORS კონფიგურაცია (ყველაზე მნიშვნელოვანი ნაწილი)
+// 2. CORS კონფიგურაცია
 // ---------------------------------------------------------
 const allowedOrigins = [
   'https://ntstyle.ge',       // შენი მთავარი დომენი
-  'https://www.ntstyle.ge',   // www ვერსიაც (ყოველი შემთხვევისთვის)
-  'http://localhost:5173',    // შენი ლოკალური კომპიუტერი
+  'https://www.ntstyle.ge',   // www ვერსია
+  'http://localhost:5173',    // შენი ლოკალური React
   'http://localhost:5174'     // რეზერვი
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // თუ origin არ არის (მაგ: Postman-დან რეკავს) ან სიაშია, ვუშვებთ
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log("Blocked by CORS:", origin); // კონსოლში გამოაჩენს ვინ დაიბლოკა
+      console.log("Blocked by CORS:", origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-  credentials: true, // Cookies/Tokens-ისთვის აუცილებელია
+  credentials: true, 
 };
 
 app.use(cors(corsOptions));
-app.use(express.json()); // JSON მონაცემების მისაღებად
+app.use(express.json()); 
 
 // ---------------------------------------------------------
-// 2. მონაცემთა ბაზა
+// 3. მონაცემთა ბაზა
 // ---------------------------------------------------------
 const connectDB = async () => {
   try {
-    // Render-ზე ეს ცვლადი Environment Variables-ში უნდა გქონდეს გაწერილი
-    await mongoose.connect(process.env.MONGODB_URI);
+    const connString = process.env.MONGO_URL || process.env.MONGODB_URI;
+    
+    if (!connString) {
+      throw new Error("MongoDB connection string is missing in .env file");
+    }
+
+    await mongoose.connect(connString);
     console.log('MongoDB Connected Successfully! 🚀');
   } catch (error) {
-    console.error(`Error: ${error.message}`);
+    console.error(`DB Error: ${error.message}`);
     process.exit(1);
   }
 };
 connectDB();
 
 // ---------------------------------------------------------
-// 3. როუტერები
+// 4. როუტერების ჩართვა
 // ---------------------------------------------------------
 app.use('/api/products', productRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/payment', paymentRoutes);
+app.use('/api/payment', paymentRoutes); 
+app.use('/api/users', userRoutes);      
+app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/orders', orderRoutes); // <--- ✅ 2. დაემატა ეს ხაზი! ახლა /api/orders იმუშავებს
 
-// ჯანმრთელობის შემოწმება (Health Check)
+// ჯანმრთელობის შემოწმება
 app.get('/', (req, res) => {
-  res.send('API is running on Render... 🟢');
+  res.send('API is running... 🟢');
 });
 
 // ---------------------------------------------------------
-// 4. Socket.io (მომავალი ფუნქციებისთვის)
+// 5. Socket.io
 // ---------------------------------------------------------
 const io = new Server(httpServer, {
-  cors: corsOptions // იგივე CORS წესები სოკეტისთვისაც
+  cors: corsOptions
 });
 
 io.on('connection', (socket) => {
   console.log('New client connected via Socket.io:', socket.id);
-  
   socket.on('disconnect', () => {
     console.log('Client disconnected');
   });
 });
 
 // ---------------------------------------------------------
-// 5. სერვერის გაშვება
+// 6. სერვერის გაშვება
 // ---------------------------------------------------------
 httpServer.listen(port, () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${port}`);
+  console.log(`Server running on port ${port}`);
 });
