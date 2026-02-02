@@ -36,11 +36,10 @@ const productSchema = new mongoose.Schema({
             required: true,
         },
     ],
-    // ✅ ეს ნაწილი აკლდა! დაამატეთ ეს:
     colors: [
         {
-            name: { type: String, required: true }, // მაგ: "Red"
-            hex: { type: String, required: true }   // მაგ: "#FF0000"
+            name: { type: String, required: true }, 
+            hex: { type: String, required: true } 
         }
     ],
     countInStock: {
@@ -57,4 +56,5 @@ const productSchema = new mongoose.Schema({
 });
 
 const Product = mongoose.model('Product', productSchema);
-export default Product;
+
+export default Product; // <--- მთავარია ეს ხაზი იყოს, და ყველაფერი იმუშავებს!
