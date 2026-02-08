@@ -1,16 +1,14 @@
-// designer-shop-backend/routes/userRoutes.js
-
 import express from 'express';
 import User from '../models/UserModel.js';
-const generateToken = (await import('../utils/generateToken.js')).default;
+import generateToken from '../utils/generateToken.js'; // სტანდარტული იმპორტი ჯობია
 
 const router = express.Router();
 
 // -------------------------------------------------------------------------
-// არსებული მარშრუტები (LOGIN & REGISTER)
+// 1. LOGIN & REGISTER
 // -------------------------------------------------------------------------
 
-// @route   POST /api/users/login
+// @route   POST /api/users/login
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
@@ -28,7 +26,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// @route   POST /api/users
+// @route   POST /api/users
 router.post('/', async (req, res) => {
     const { name, email, password } = req.body;
     
@@ -53,21 +51,17 @@ router.post('/', async (req, res) => {
             res.status(400).json({ message: 'არასწორი მომხმარებლის მონაცემები' });
         }
     } catch (error) {
-        console.error("MongoDB Registration Error:", error); 
-        let errorMessage = 'რეგისტრაციის სისტემური შეცდომა';
-        if (error.name === 'ValidationError') {
-            errorMessage = Object.values(error.errors).map(val => val.message).join('; ');
-        }
-        res.status(500).json({ message: errorMessage });
+        console.error("Registration Error:", error); 
+        res.status(500).json({ message: 'რეგისტრაციის სისტემური შეცდომა' });
     }
 });
 
 // -------------------------------------------------------------------------
-// ✅ ახალი მარშრუტები WISHLIST-ისთვის
+// 2. WISHLIST (შესწორებული და გამართული)
 // -------------------------------------------------------------------------
 
 // @route   PUT /api/users/wishlist
-// @desc    პროდუქტის დამატება ან წაშლა ვიშლისტიდან
+// @desc    Add or Remove item (Toggle)
 router.put('/wishlist', async (req, res) => {
     const { userId, productId } = req.body;
 
@@ -78,35 +72,35 @@ router.put('/wishlist', async (req, res) => {
             return res.status(404).json({ message: "მომხმარებელი ვერ მოიძებნა" });
         }
 
-        // ვამოწმებთ, არის თუ არა პროდუქტი უკვე დამატებული
-        const index = user.wishlist.indexOf(productId);
+        // ✅ შესწორება: ვამოწმებთ String-ად გადაყვანილ ID-ებს (უფრო საიმედოა)
+        const alreadyAdded = user.wishlist.some(id => id.toString() === productId);
 
-        if (index === -1) {
-            // თუ არ არის, ვამატებთ (Add)
-            user.wishlist.push(productId);
+        if (alreadyAdded) {
+            // თუ არის - ამოშალოს
+            user.wishlist = user.wishlist.filter(id => id.toString() !== productId);
         } else {
-            // თუ არის, ვშლით (Remove)
-            user.wishlist.splice(index, 1);
+            // თუ არ არის - დაამატოს
+            user.wishlist.push(productId);
         }
 
         await user.save();
 
-        // ვაბრუნებთ განახლებულ ვიშლისტს პროდუქტის დეტალებით (Populate)
-        // მნიშვნელოვანია: 'wishlist' ველის populate, რათა ფრონტენდმა მიიღოს ფოტო და სახელი
+        // ვაბრუნებთ დასურათებულ (Populated) სიას
         const updatedUser = await User.findById(userId).populate('wishlist');
         
         res.json(updatedUser.wishlist);
 
     } catch (error) {
-        console.error("Wishlist Error:", error);
+        console.error("Wishlist Update Error:", error);
         res.status(500).json({ message: "სერვერის შეცდომა ვიშლისტის განახლებისას" });
     }
 });
 
 // @route   GET /api/users/:id/wishlist
-// @desc    კონკრეტული მომხმარებლის ვიშლისტის წამოღება
+// @desc    Get user wishlist
 router.get('/:id/wishlist', async (req, res) => {
     try {
+        // მნიშვნელოვანია .populate('wishlist'), რომ ფრონტმა მიიღოს ფოტო და ფასი
         const user = await User.findById(req.params.id).populate('wishlist');
         
         if (user) {
@@ -115,7 +109,7 @@ router.get('/:id/wishlist', async (req, res) => {
             res.status(404).json({ message: "მომხმარებელი ვერ მოიძებნა" });
         }
     } catch (error) {
-        console.error("Fetch Wishlist Error:", error);
+        console.error("Wishlist Fetch Error:", error);
         res.status(500).json({ message: "ვერ მოხერხდა ვიშლისტის წამოღება" });
     }
 });
