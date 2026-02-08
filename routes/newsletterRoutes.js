@@ -16,20 +16,20 @@ const sendDiscountEmail = async (userEmail) => {
 
   // ტრანსპორტერის შექმნა
   const transporter = nodemailer.createTransport({
-    service: 'gmail', // დავამატეთ ეს
+    service: 'gmail',
     host: 'smtp.gmail.com',
     port: 587,
-    secure: false, // true მხოლოდ 465 პორტისთვის
+    secure: false,
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, // შენი App Password
+      pass: process.env.EMAIL_PASS,
     },
     tls: {
-      rejectUnauthorized: false // <--- ეს ეხმარება ლოკალურ სერვერზე გაშვებისას
+      rejectUnauthorized: false
     }
   });
 
-  // ლამაზი HTML შაბლონი
+  // HTML შაბლონი
   const htmlTemplate = `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; color: #333; border: 1px solid #e1e1e1;">
       <div style="background-color: #000; padding: 20px; text-align: center;">
@@ -74,16 +74,28 @@ router.post('/subscribe', async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    console.log(`📩 Attempting to send email to: ${email}`);
+    console.log(`📩 Request received for: ${email}`);
     
-    // მეილის გაგზავნა
-    await sendDiscountEmail(email);
-
-    console.log(`✅ Email sent successfully to: ${email}`);
+    // ✅ ნაბიჯი 1: მომხმარებელს ვპასუხობთ მომენტალურად!
+    // აქ აღარ ველოდებით მეილის გაგზავნას (await-ის გარეშე)
     res.status(200).json({ success: true, message: "Discount code sent successfully!" });
+
+    // ✅ ნაბიჯი 2: მეილს ვაგზავნით ფონურად (Background)
+    sendDiscountEmail(email)
+      .then(() => {
+        console.log(`✅ Email successfully sent to: ${email} (Background)`);
+      })
+      .catch((err) => {
+        // ეს ერორი გამოჩნდება მხოლოდ Render-ის ლოგებში და არ შეაწუხებს მომხმარებელს
+        console.error("❌ Background Email Error:", err.message);
+      });
+
   } catch (error) {
-    console.error("❌ Newsletter Error:", error);
-    res.status(500).json({ success: false, message: "Failed to send email", error: error.message });
+    console.error("❌ Controller Error:", error);
+    // შეცდომას ვაბრუნებთ მხოლოდ თუ პასუხი ჯერ არ გაგვიცია
+    if (!res.headersSent) {
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
   }
 });
 
