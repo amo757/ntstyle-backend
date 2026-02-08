@@ -7,7 +7,7 @@ dotenv.config();
 
 // 📧 მეილის გამგზავნი ფუნქცია (უნივერსალური)
 const sendOrderEmail = async (order, recipientEmail, userInfo) => {
-  // შემოწმება
+  // შემოწმება: არსებობს თუ არა პაროლი და მეილი .env-ში
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.error("❌ Email credentials missing in .env");
     return;
@@ -16,7 +16,7 @@ const sendOrderEmail = async (order, recipientEmail, userInfo) => {
   try {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
-      host: 'smtp.gmail.com',
+      host: 'smtp.gmail.com', // დავამატეთ ჰოსტი
       port: 587,
       secure: false,
       auth: {
@@ -24,7 +24,7 @@ const sendOrderEmail = async (order, recipientEmail, userInfo) => {
         pass: process.env.EMAIL_PASS,
       },
       tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false // ლოკალურზე პრობლემების თავიდან ასაცილებლად
       }
     });
 
@@ -104,11 +104,11 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // 🚀 ნაბიჯი 2: პასუხს ვაბრუნებთ მომენტალურად!
-    // აქ კოდი აღარ ჩერდება, მომხმარებელი გადადის Next Step-ზე
+    // 🚀 ცვლილება: პასუხს ვაბრუნებთ მომენტალურად!
+    // აქ კოდი აღარ ჩერდება და მომხმარებელი გადადის შემდეგ გვერდზე
     res.status(201).json(createdOrder);
 
-    // 📧 ნაბიჯი 3: მეილები იგზავნება ფონურად (Background)
+    // 📧 მეილები იგზავნება ფონურად (Background)
     const userInfo = {
       name: req.user.name,
       email: req.user.email
@@ -116,11 +116,11 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     console.log("📨 Starting background email process...");
 
-    // ადმინისტრატორთან გაგზავნა
+    // ადმინისტრატორთან გაგზავნა (await-ის გარეშე)
     sendOrderEmail(createdOrder, process.env.EMAIL_USER, userInfo)
       .catch(err => console.log("Admin email failed:", err));
 
-    // მყიდველთან გაგზავნა
+    // მყიდველთან გაგზავნა (await-ის გარეშე)
     sendOrderEmail(createdOrder, userInfo.email, userInfo)
       .catch(err => console.log("User email failed:", err));
   }
