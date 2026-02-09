@@ -5,26 +5,27 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 📧 მეილის გამგზავნი ფუნქცია (უნივერსალური)
+// 📧 მეილის გამგზავნი ფუნქცია
 const sendOrderEmail = async (order, recipientEmail, userInfo) => {
-  // შემოწმება: არსებობს თუ არა პაროლი და მეილი .env-ში ან Render-ზე
+  // შემოწმება: არსებობს თუ არა პაროლი და მეილი .env-ში
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.error("❌ Email credentials missing in .env");
     return;
   }
 
   try {
+    // 👇 აქ არის მთავარი ცვლილება! (Port 465 + Secure: true)
     const transporter = nodemailer.createTransport({
-      // service: 'gmail', <--- ეს აღარ გვინდა, რადგან host-ს ვიყენებთ
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com', // Render-ის ცვლადი ან დეფოლტი
-      port: process.env.EMAIL_PORT || 587, // Render-ის ცვლადი ან დეფოლტი
-      secure: false, // true მხოლოდ 465 პორტზე
+      service: 'gmail', // Gmail-ისთვის ამის დამატებაც კარგია
+      host: 'smtp.gmail.com',
+      port: 465, // 587-ის ნაცვლად ვიყენებთ 465-ს (SSL)
+      secure: true, // 465 პორტზე ეს აუცილებლად true უნდა იყოს
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
       tls: {
-        rejectUnauthorized: false // სერტიფიკატის პრობლემების თავიდან ასაცილებლად
+        rejectUnauthorized: false
       }
     });
 
@@ -104,7 +105,7 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // 🚀 მნიშვნელოვანი: პასუხს ვაბრუნებთ მომენტალურად!
+    // 🚀 პასუხს ვაბრუნებთ მომენტალურად!
     res.status(201).json(createdOrder);
 
     // 📧 მეილები იგზავნება ფონურად (Background)
@@ -116,6 +117,7 @@ const addOrderItems = asyncHandler(async (req, res) => {
     console.log("📨 Starting background email process...");
 
     // ადმინისტრატორთან გაგზავნა
+    // აქ იგზავნება ისევ შენს მეილზე (რაც ENV-ში გიწერია)
     sendOrderEmail(createdOrder, process.env.EMAIL_USER, userInfo)
       .catch(err => console.log("Admin email failed:", err));
 
