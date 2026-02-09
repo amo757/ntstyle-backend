@@ -7,7 +7,7 @@ dotenv.config();
 
 // 📧 მეილის გამგზავნი ფუნქცია (უნივერსალური)
 const sendOrderEmail = async (order, recipientEmail, userInfo) => {
-  // შემოწმება: არსებობს თუ არა პაროლი და მეილი .env-ში
+  // შემოწმება: არსებობს თუ არა პაროლი და მეილი .env-ში ან Render-ზე
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.error("❌ Email credentials missing in .env");
     return;
@@ -15,16 +15,16 @@ const sendOrderEmail = async (order, recipientEmail, userInfo) => {
 
   try {
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com', // დავამატეთ ჰოსტი
-      port: 587,
-      secure: false,
+      // service: 'gmail', <--- ეს აღარ გვინდა, რადგან host-ს ვიყენებთ
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com', // Render-ის ცვლადი ან დეფოლტი
+      port: process.env.EMAIL_PORT || 587, // Render-ის ცვლადი ან დეფოლტი
+      secure: false, // true მხოლოდ 465 პორტზე
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
       tls: {
-        rejectUnauthorized: false // ლოკალურზე პრობლემების თავიდან ასაცილებლად
+        rejectUnauthorized: false // სერტიფიკატის პრობლემების თავიდან ასაცილებლად
       }
     });
 
@@ -104,8 +104,7 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // 🚀 ცვლილება: პასუხს ვაბრუნებთ მომენტალურად!
-    // აქ კოდი აღარ ჩერდება და მომხმარებელი გადადის შემდეგ გვერდზე
+    // 🚀 მნიშვნელოვანი: პასუხს ვაბრუნებთ მომენტალურად!
     res.status(201).json(createdOrder);
 
     // 📧 მეილები იგზავნება ფონურად (Background)
@@ -116,11 +115,11 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     console.log("📨 Starting background email process...");
 
-    // ადმინისტრატორთან გაგზავნა (await-ის გარეშე)
+    // ადმინისტრატორთან გაგზავნა
     sendOrderEmail(createdOrder, process.env.EMAIL_USER, userInfo)
       .catch(err => console.log("Admin email failed:", err));
 
-    // მყიდველთან გაგზავნა (await-ის გარეშე)
+    // მყიდველთან გაგზავნა
     sendOrderEmail(createdOrder, userInfo.email, userInfo)
       .catch(err => console.log("User email failed:", err));
   }
