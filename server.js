@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import nodemailer from 'nodemailer'; // <--- ✅ იმპორტი დამატებულია
+import nodemailer from 'nodemailer'; 
 
 // ---------------------------------------------------------
 // 1. როუტერების იმპორტი
@@ -70,38 +70,41 @@ const connectDB = async () => {
 connectDB();
 
 // ---------------------------------------------------------
-// 4. სატესტო მეილის როუტერი (DEBUGGER)
+// 4. სატესტო მეილის როუტერი (Brevo Debugger)
 // ---------------------------------------------------------
 app.get('/test-email', async (req, res) => {
-  const { EMAIL_USER, EMAIL_PASS } = process.env;
+  // ვიღებთ Render-ში გაწერილ ახალ ცვლადებს
+  const { EMAIL_USER, EMAIL_PASS, EMAIL_HOST, EMAIL_PORT } = process.env;
 
   res.setHeader('Content-Type', 'text/html');
-  res.write(`<h1>📧 Email Debugger</h1>`);
+  res.write(`<h1>📧 Brevo Email Debugger</h1>`);
+  res.write(`<p>Host: ${EMAIL_HOST}</p>`);
+  res.write(`<p>Port: ${EMAIL_PORT}</p>`);
   
   try {
-    // ვქმნით ტრანსპორტერს (ვცადოთ 465 SSL-ით, რადგან ეს ყველაზე საიმედოა)
+    // ⚠️ აქ უკვე ვიყენებთ დინამიურ ცვლადებს და არა hardcoded Gmail-ს
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, 
+      host: EMAIL_HOST, // smtp-relay.brevo.com
+      port: Number(EMAIL_PORT), // 587
+      secure: false, // 587-ისთვის false
       auth: {
-        user: EMAIL_USER,
-        pass: EMAIL_PASS,
+        user: EMAIL_USER, // შენი Brevo Login ID
+        pass: EMAIL_PASS, // შენი Brevo API Key
       },
-      tls: { rejectUnauthorized: false }, // სერთიფიკატის პრობლემების იგნორირება
-      connectionTimeout: 10000 // 10 წამი
     });
 
-    res.write(`<p>🔌 Connecting to Gmail (Port 465)...</p>`);
+    res.write(`<p>🔌 Connecting to Brevo SMTP...</p>`);
     await transporter.verify();
     res.write(`<p style="color:green; font-weight:bold;">✅ Connection Verified!</p>`);
 
-    res.write(`<p>📨 Sending test email to ${EMAIL_USER}...</p>`);
+    res.write(`<p>📨 Sending test email...</p>`);
+    
+    // გაგზავნა
     await transporter.sendMail({
-      from: `"Test Debugger" <${EMAIL_USER}>`,
-      to: EMAIL_USER,
-      subject: "Test Email from Render Server",
-      html: "<h3>It Works! 🎉</h3><p>Email system is operational.</p>"
+      from: `"Test Debugger" <natiatkhelidze.n.t.style@gmail.com>`, // ლამაზად გამოჩენისთვის
+      to: "natiatkhelidze.n.t.style@gmail.com", // პირდაპირ შენთან მოვა
+      subject: "Test Email from Render (via Brevo)",
+      html: "<h3>It Works! 🎉</h3><p>Brevo SMTP is working perfectly.</p>"
     });
 
     res.write(`<h2 style="color:green">🎉 SUCCESS! Email Sent.</h2>`);
@@ -110,8 +113,7 @@ app.get('/test-email', async (req, res) => {
   } catch (error) {
     res.write(`<h2 style="color:red">❌ FAILED</h2>`);
     res.write(`<p><strong>Error Message:</strong> ${error.message}</p>`);
-    res.write(`<p><strong>Code:</strong> ${error.code}</p>`);
-    res.write(`<p><em>Note: If code is ETIMEDOUT, Gmail is blocking Render's IP.</em></p>`);
+    res.write(`<pre>${JSON.stringify(error, null, 2)}</pre>`);
     res.end();
   }
 });

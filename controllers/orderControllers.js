@@ -5,22 +5,22 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 📧 მეილის გაგზავნის ფუნქცია (მხოლოდ SSL - Port 465)
+// 📧 მეილის გაგზავნის ფუნქცია (Brevo SMTP - Port 587)
 const sendOrderEmail = async (order, recipientEmail, userInfo) => {
   try {
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',  // 👈 ხელით ვუთითებთ ჰოსტს
-      port: 465,               // 👈 ვიყენებთ 465-ს (SSL)
-      secure: true,            // 👈 465-ისთვის ეს აუცილებლად true უნდა იყოს
+      host: process.env.EMAIL_HOST, // Render-იდან: smtp-relay.brevo.com
+      port: process.env.EMAIL_PORT, // Render-იდან: 587
+      secure: false,                // 587-ისთვის false
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: process.env.EMAIL_USER, // Brevo Login
+        pass: process.env.EMAIL_PASS, // Brevo Key
       },
-      family: 4, // 👈 იძულებით IPv4 (გაჭედვის თავიდან ასაცილებლად)
     });
 
     const mailOptions = {
-      from: `"N.T.Style" <${process.env.EMAIL_USER}>`,
+      // მომხმარებელი დაინახავს "N.T.Style"-ს და შენს Gmail-ს
+      from: `"N.T.Style" <natiatkhelidze.n.t.style@gmail.com>`, 
       to: recipientEmail,
       subject: `Order Confirmation: #${order._id}`,
       html: `
@@ -28,6 +28,7 @@ const sendOrderEmail = async (order, recipientEmail, userInfo) => {
           <h2>თქვენი შეკვეთა მიღებულია!</h2>
           <p>Order ID: ${order._id}</p>
           <p>Total: ${order.totalPrice} GEL</p>
+          <p>Thank you for shopping with us!</p>
         </div>
       `,
     };
@@ -71,11 +72,14 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // 📧 მეილების გაგზავნა (Await - ველოდებით, რომ არ გაითიშოს)
-    console.log("⏳ Sending emails on Port 465...");
+    // 📧 მეილების გაგზავნა Brevo-ს გავლით
+    console.log("⏳ Sending emails via Brevo...");
     
-    await sendOrderEmail(createdOrder, process.env.EMAIL_USER, { name: 'Admin', email: process.env.EMAIL_USER });
-    await sendOrderEmail(createdOrder, req.user.email, { name: req.user.name, email: req.user.email });
+    // ადმინს (შენ)
+    await sendOrderEmail(createdOrder, "natiatkhelidze.n.t.style@gmail.com", { name: 'Admin' });
+    
+    // მომხმარებელს
+    await sendOrderEmail(createdOrder, req.user.email, { name: req.user.name });
 
     console.log("✅ All done, sending response.");
     res.status(201).json(createdOrder);
