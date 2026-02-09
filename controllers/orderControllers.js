@@ -5,15 +5,18 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 📧 მეილის გაგზავნის ფუნქცია
+// 📧 მეილის გაგზავნის ფუნქცია (მხოლოდ SSL - Port 465)
 const sendOrderEmail = async (order, recipientEmail, userInfo) => {
   try {
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',  // 👈 ხელით ვუთითებთ ჰოსტს
+      port: 465,               // 👈 ვიყენებთ 465-ს (SSL)
+      secure: true,            // 👈 465-ისთვის ეს აუცილებლად true უნდა იყოს
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      family: 4, // 👈 იძულებით IPv4 (გაჭედვის თავიდან ასაცილებლად)
     });
 
     const mailOptions = {
@@ -22,19 +25,18 @@ const sendOrderEmail = async (order, recipientEmail, userInfo) => {
       subject: `Order Confirmation: #${order._id}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px;">
-          <h2>მადლობა შეკვეთისთვის!</h2>
+          <h2>თქვენი შეკვეთა მიღებულია!</h2>
           <p>Order ID: ${order._id}</p>
           <p>Total: ${order.totalPrice} GEL</p>
         </div>
       `,
     };
 
-    // აქ ველოდებით გაგზავნას (await)
+    // ველოდებით გაგზავნას
     await transporter.sendMail(mailOptions);
     console.log(`✅ Email sent to: ${recipientEmail}`);
   } catch (error) {
     console.error(`❌ Email Failed:`, error);
-    // აქ არ ვაგდებთ throw error-ს, რადგან მეილის გამო შეკვეთა არ უნდა გაუქმდეს
   }
 };
 
@@ -67,18 +69,15 @@ const addOrderItems = asyncHandler(async (req, res) => {
       totalPrice,
     });
 
-    // 1. ვინახავთ შეკვეთას
     const createdOrder = await order.save();
 
-    // 2. 📧 მეილების გაგზავნა (AWAIT - ველოდებით!)
-    // ეს არის ის, რაც შევცვალეთ. სერვერი არ უპასუხებს ფრონტს, სანამ მეილს არ გაუშვებს.
-    console.log("⏳ Sending emails before response...");
+    // 📧 მეილების გაგზავნა (Await - ველოდებით, რომ არ გაითიშოს)
+    console.log("⏳ Sending emails on Port 465...");
     
     await sendOrderEmail(createdOrder, process.env.EMAIL_USER, { name: 'Admin', email: process.env.EMAIL_USER });
     await sendOrderEmail(createdOrder, req.user.email, { name: req.user.name, email: req.user.email });
 
-    // 3. მხოლოდ ახლა ვაბრუნებთ პასუხს
-    console.log("✅ All done, sending response to frontend.");
+    console.log("✅ All done, sending response.");
     res.status(201).json(createdOrder);
   }
 });
