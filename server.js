@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import nodemailer from 'nodemailer'; // <--- ✅ დაემატა იმპორტი
+import nodemailer from 'nodemailer'; // <--- ✅ იმპორტი დამატებულია
 
 // ---------------------------------------------------------
 // 1. როუტერების იმპორტი
@@ -30,12 +30,11 @@ const allowedOrigins = [
   'https://www.ntstyle.ge',   // www ვერსია
   'http://localhost:5173',    // შენი ლოკალური React
   'http://localhost:5174',    // რეზერვი
-  'https://ntstyle-api.onrender.com' // საკუთარი თავი (ტესტირებისთვის)
+  'https://ntstyle-api.onrender.com' // API (საკუთარი თავი)
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // !origin ნიშნავს, რომ სერვერიდან სერვერზე იგზავნება მოთხოვნა (მაგ. Postman ან ბრაუზერის პირდაპირი ლინკი)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -71,63 +70,54 @@ const connectDB = async () => {
 connectDB();
 
 // ---------------------------------------------------------
-// 4. სატესტო მეილის როუტერი (დროებითი)
+// 4. სატესტო მეილის როუტერი (DEBUGGER)
 // ---------------------------------------------------------
 app.get('/test-email', async (req, res) => {
-  const { EMAIL_USER, EMAIL_PASS, EMAIL_HOST, EMAIL_PORT } = process.env;
+  const { EMAIL_USER, EMAIL_PASS } = process.env;
 
-  // HTML პასუხის მომზადება
   res.setHeader('Content-Type', 'text/html');
   res.write(`<h1>📧 Email Debugger</h1>`);
-  res.write(`<p><strong>User:</strong> ${EMAIL_USER}</p>`);
-  res.write(`<p><strong>Port from Env:</strong> ${EMAIL_PORT}</p>`);
-
+  
   try {
-    // ვქმნით ტრანსპორტერს (მკაცრად 465 პორტზე და Secure: true)
+    // ვქმნით ტრანსპორტერს (ვცადოთ 465 SSL-ით, რადგან ეს ყველაზე საიმედოა)
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
-      secure: true, // 465-ისთვის აუცილებელია true
+      secure: true, 
       auth: {
         user: EMAIL_USER,
         pass: EMAIL_PASS,
       },
-      tls: {
-        rejectUnauthorized: false
-      },
-      connectionTimeout: 10000 // 10 წამიანი ტაიმერი
+      tls: { rejectUnauthorized: false }, // სერთიფიკატის პრობლემების იგნორირება
+      connectionTimeout: 10000 // 10 წამი
     });
 
     res.write(`<p>🔌 Connecting to Gmail (Port 465)...</p>`);
-    
-    // კავშირის შემოწმება
     await transporter.verify();
     res.write(`<p style="color:green; font-weight:bold;">✅ Connection Verified!</p>`);
 
-    // მეილის გაგზავნა
-    res.write(`<p>📨 Sending test email...</p>`);
-    const info = await transporter.sendMail({
+    res.write(`<p>📨 Sending test email to ${EMAIL_USER}...</p>`);
+    await transporter.sendMail({
       from: `"Test Debugger" <${EMAIL_USER}>`,
-      to: EMAIL_USER, // საკუთარ თავს უგზავნის
+      to: EMAIL_USER,
       subject: "Test Email from Render Server",
-      html: "<h3>It Works! 🎉</h3><p>If you received this, the email system is working correctly.</p>"
+      html: "<h3>It Works! 🎉</h3><p>Email system is operational.</p>"
     });
 
     res.write(`<h2 style="color:green">🎉 SUCCESS! Email Sent.</h2>`);
-    res.write(`<pre>Message ID: ${info.messageId}</pre>`);
     res.end();
 
   } catch (error) {
     res.write(`<h2 style="color:red">❌ FAILED</h2>`);
     res.write(`<p><strong>Error Message:</strong> ${error.message}</p>`);
-    res.write(`<p><strong>Error Code:</strong> ${error.code}</p>`);
-    res.write(`<pre style="background:#eee; padding:10px;">${JSON.stringify(error, null, 2)}</pre>`);
+    res.write(`<p><strong>Code:</strong> ${error.code}</p>`);
+    res.write(`<p><em>Note: If code is ETIMEDOUT, Gmail is blocking Render's IP.</em></p>`);
     res.end();
   }
 });
 
 // ---------------------------------------------------------
-// 5. სტანდარტული როუტერები
+// 5. როუტერების ჩართვა
 // ---------------------------------------------------------
 app.use('/api/products', productRoutes);
 app.use('/api/payment', paymentRoutes);
@@ -141,7 +131,7 @@ app.get('/', (req, res) => {
 });
 
 // ---------------------------------------------------------
-// 6. Socket.io
+// 6. Socket.io და სერვერის გაშვება
 // ---------------------------------------------------------
 const io = new Server(httpServer, {
   cors: corsOptions
@@ -154,9 +144,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// ---------------------------------------------------------
-// 7. სერვერის გაშვება
-// ---------------------------------------------------------
 httpServer.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
