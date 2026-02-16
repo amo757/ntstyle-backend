@@ -5,22 +5,24 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 📧 1. ტრანსპორტერის შექმნა (Gmail App Password)
-// ეს გარეთ გამაქვს, რომ ყოველ ჯერზე თავიდან არ შეიქმნას
-// ✅ ახალი ვერსია (პორტი 587)
-// ✅ ყველაზე სტაბილური კონფიგურაცია Render-ისთვის (SSL)
+// 📧 ტრანსპორტერის კონფიგურაცია (დაცული რეჟიმი)
+// ვუთითებთ დროის ლიმიტებს, რომ სერვერი არ გაიჭედოს
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,             // ვიყენებთ SSL პორტს
-  secure: true,          // 465-ისთვის ეს აუცილებლად true უნდა იყოს!
+  port: 587, // ვცადოთ პორტი 587 (TLS), ეს უფრო სტანდარტულია
+  secure: false, 
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    // ეს პარამეტრი ეხმარება სერვერს, თუ სერთიფიკატის პრობლემა შეექმნა
-    rejectUnauthorized: false
-  }
+    rejectUnauthorized: false,
+    ciphers: 'SSLv3'
+  },
+  // 🛑 ეს პარამეტრები გადამწყვეტია Render-ისთვის:
+  connectionTimeout: 10000, // 10 წამში თუ არ დაუკავშირდა, გათიშოს
+  greetingTimeout: 10000,
+  socketTimeout: 10000 
 });
 
 // @desc    Create new order
@@ -59,15 +61,15 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // 📧 2. მეილების გაგზავნა (Background Process)
-    // არ ველოდებით (await-ის გარეშე), რომ კლიენტს პასუხი სწრაფად დაუბრუნდეს
+    // 📧 2. მეილების გაგზავნა (Safe Mode)
+    // Try/Catch ბლოკშია, რომ მეილის შეცდომამ შეკვეთა არ გააფუჭოს
     try {
-      console.log("📨 Sending emails...");
+      console.log("📨 Attempting to send emails...");
 
-      // A) მეილი მომხმარებელს (Confirmation)
-      transporter.sendMail({
-        from: '"N.T.Style Orders" <amiamo757@gmail.com>', // 👈 ეს გამოჩნდება ლამაზად
-        to: req.user.email, // კლიენტის მეილი
+      // A) მეილი მომხმარებელს
+      await transporter.sendMail({
+        from: '"N.T.Style Orders" <amiamo757@gmail.com>',
+        to: req.user.email,
         subject: `თქვენი შეკვეთა მიღებულია! #${createdOrder._id}`,
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee;">
@@ -81,10 +83,10 @@ const addOrderItems = asyncHandler(async (req, res) => {
         `,
       });
 
-      // B) მეილი შენ (ადმინს) - დეტალური ინფო
-      transporter.sendMail({
+      // B) მეილი ადმინს (შენ)
+      await transporter.sendMail({
         from: '"System Bot" <amiamo757@gmail.com>',
-        to: "amiamo757@gmail.com", // 👈 აქ მოდის შენთან
+        to: "amiamo757@gmail.com",
         subject: `🔔 ახალი შეკვეთა: ${req.user.name} - ${createdOrder.totalPrice} GEL`,
         html: `
           <div style="font-family: Arial, sans-serif;">
@@ -92,18 +94,22 @@ const addOrderItems = asyncHandler(async (req, res) => {
             <p><strong>მომხმარებელი:</strong> ${req.user.name} (${req.user.email})</p>
             <p><strong>თანხა:</strong> ${createdOrder.totalPrice} GEL</p>
             <p><strong>მისამართი:</strong> ${shippingAddress.address}, ${shippingAddress.city}</p>
-            <p><strong>ტელეფონი:</strong> ${shippingAddress.postalCode || 'მითითებული არაა'}</p> 
+            <p><strong>ტელეფონი:</strong> ${shippingAddress.postalCode || 'N/A'}</p> 
             <br/>
-            <a href="https://ntstyle.ge/order/${createdOrder._id}" style="background: #000; color: #fff; padding: 10px; text-decoration: none;">შეკვეთის ნახვა</a>
+            <a href="https://ntstyle.ge/order/${createdOrder._id}">შეკვეთის ნახვა</a>
           </div>
         `,
       });
+      
+      console.log("✅ Emails sent successfully!");
 
     } catch (error) {
-      console.error("❌ Email sending failed:", error);
-      // არ ვაჩერებთ პროცესს, რადგან შეკვეთა უკვე ბაზაშია
+      // 🛑 აქ ვიჭერთ ერორს, რომ საიტი არ გაითიშოს
+      console.error("⚠️ EMAIL ERROR (Order saved successfully though):");
+      console.error(error.message); 
     }
 
+    // პასუხი ბრუნდება ნებისმიერ შემთხვევაში (გაიგზავნა მეილი თუ არა)
     res.status(201).json(createdOrder);
   }
 });
