@@ -39,62 +39,102 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // 📧 პროდუქტების სიის გენერაცია HTML-ისთვის
+    // 1. პროდუქტების სიის გენერაცია (ზომის და რაოდენობის ფიქსით)
     const itemsListHtml = orderItems.map(item => `
       <tr>
-        <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.qty} x ${item.price} GEL</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          <strong>${item.name}</strong><br/>
+          ${item.size ? `<span style="color: #555; font-size: 12px;">ზომა: ${item.size}</span>` : ''}
+        </td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">
+          ${item.qty || item.quantity || 1} x ${item.price} GEL
+        </td>
       </tr>
     `).join('');
 
     try {
-      console.log("🚀 Attempting to send order report to admin and user...");
+      console.log("🚀 Attempting to send separate emails to Admin and User...");
 
+      // 📧 ა) წერილი მომხმარებლისთვის (ესთეტიური დიზაინი)
       await resend.emails.send({
-        from: 'N.T.Style <info@ntstyle.ge>', // შენი Verified დომენი
-        to: ['amiamo757@gmail.com', req.user.email], // მეილი მოგივა შენც და კლიენტსაც
-        subject: `ახალი შეკვეთა! #${createdOrder._id} - ${req.user.name}`,
+        from: 'N.T.Style <info@ntstyle.ge>',
+        to: [req.user.email],
+        subject: 'მადლობა შეკვეთისთვის! 🎉',
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px;">
-            <h2 style="color: #333; text-align: center;">ახალი შეკვეთის დეტალები 🎉</h2>
-            
-            <h4 style="background: #f4f4f4; padding: 10px;">👤 მყიდველის ინფორმაცია:</h4>
-            <p><strong>სახელი:</strong> ${req.user.name}</p>
-            <p><strong>ელ-ფოსტა:</strong> ${req.user.email}</p>
-            <p><strong>ტელეფონი:</strong> ${shippingAddress.postalCode || 'არ არის მითითებული'}</p>
-            <p><strong>მისამართი:</strong> ${shippingAddress.address}, ${shippingAddress.city}</p>
-
-            <h4 style="background: #f4f4f4; padding: 10px;">📦 შეკვეთილი პროდუქტები:</h4>
-            <table style="width: 100%; border-collapse: collapse;">
-              <thead>
-                <tr style="background: #eee;">
-                  <th style="padding: 10px; text-align: left;">პროდუქტი</th>
-                  <th style="padding: 10px; text-align: center;">რაოდენობა/ფასი</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${itemsListHtml}
-              </tbody>
-            </table>
-
-            <div style="margin-top: 20px; text-align: right; font-size: 18px;">
-              <strong>ჯამური თანხა: <span style="color: #e44d26;">${totalPrice} GEL</span></strong>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+            <div style="background: #000; color: #fff; padding: 20px; text-align: center;">
+              <h2 style="margin: 0;">N.T.Style</h2>
             </div>
-
-            <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;" />
-            <p style="text-align: center;">
-              <a href="https://ntstyle.ge/order/${createdOrder._id}" 
-                 style="background: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-                 ადმინ პანელში ნახვა
-              </a>
-            </p>
+            <div style="padding: 20px; color: #333;">
+              <h3 style="text-align: center;">თქვენი შეკვეთა მიღებულია!</h3>
+              <p>მოგესალმებით ${req.user.name}, თქვენი შეკვეთა <strong>#${createdOrder._id.toString().slice(-6).toUpperCase()}</strong> წარმატებით გაფორმდა.</p>
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <tr style="background: #f8f8f8;">
+                  <th style="padding: 10px; text-align: left;">პროდუქტი</th>
+                  <th style="padding: 10px; text-align: center;">რაოდენობა</th>
+                </tr>
+                ${itemsListHtml}
+              </table>
+              <div style="text-align: right; font-size: 18px; font-weight: bold; border-top: 2px solid #eee; padding-top: 10px;">
+                ჯამური თანხა: ${totalPrice} GEL
+              </div>
+              <p style="font-size: 12px; color: #888; text-align: center; margin-top: 20px;">
+                ჩვენ მალე დაგიკავშირდებით დეტალების დასაზუსტებლად.
+              </p>
+            </div>
           </div>
-        `,
+        `
       });
 
-      console.log("✅ Order details sent to admin!");
+      // 📧 ბ) წერილი შენთვის (სრული რეპორტი ადმინისთვის)
+      await resend.emails.send({
+        from: 'System <info@ntstyle.ge>',
+        to: ['amiamo757@gmail.com'], 
+        subject: `🚨 ახალი შეკვეთა! #${createdOrder._id} - ${req.user.name}`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; background: #f4f4f4;">
+            <div style="background: #fff; padding: 20px; border-radius: 5px;">
+              <h2>ახალი შეკვეთის რეპორტი</h2>
+              <hr/>
+              <h4>👤 მყიდველი:</h4>
+              <p><strong>სახელი:</strong> ${req.user.name}</p>
+              <p><strong>ელ-ფოსტა:</strong> ${req.user.email}</p>
+              <p><strong>ტელეფონი:</strong> ${shippingAddress.postalCode || 'არ არის'}</p>
+              <p><strong>მისამართი:</strong> ${shippingAddress.address}, ${shippingAddress.city}</p>
+              
+              <h4>📦 პროდუქტები:</h4>
+              <table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background: #eee;">
+                    <th>პროდუქტი</th>
+                    <th>ID</th>
+                    <th>ზომა / რაოდ.</th>
+                    <th>ფასი</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${orderItems.map(item => `
+                    <tr>
+                      <td>${item.name}</td>
+                      <td><small>${item.product}</small></td>
+                      <td>${item.size || 'N/A'} / ${item.qty || 1}</td>
+                      <td>${item.price} GEL</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              <h3>ჯამური თანხა: ${totalPrice} GEL</h3>
+              <p><strong>გადახდის მეთოდი:</strong> ${paymentMethod}</p>
+              <br/>
+              <a href="https://ntstyle.ge/order/${createdOrder._id}" style="display: inline-block; background: #000; color: #fff; padding: 10px 20px; text-decoration: none;">ადმინ პანელში ნახვა</a>
+            </div>
+          </div>
+        `
+      });
+
+      console.log("✅ Confirmation and Admin emails sent!");
     } catch (error) {
-      console.error("❌ Resend Error:", error.message);
+      console.error("❌ Email Error:", error.message);
     }
 
     res.status(201).json(createdOrder);
