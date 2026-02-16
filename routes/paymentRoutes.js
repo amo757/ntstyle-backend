@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import https from 'https'; // 👈 აუცილებელია SSL-ის შეცდომის ასარიდებლად
 import Order from '../models/orderModel.js';
 import User from '../models/UserModel.js';
 import { Resend } from 'resend';
@@ -10,6 +11,11 @@ dotenv.config();
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// SSL სერტიფიკატის ვალიდაციის დროებითი გათიშვა Sandbox-ისთვის
+const httpsAgent = new https.Agent({ 
+    rejectUnauthorized: false 
+});
+
 // --- 🔑 TBC ტოკენის აღება (Sandbox) ---
 const getTbcToken = async () => {
     try {
@@ -19,12 +25,12 @@ const getTbcToken = async () => {
         params.append('grant_type', 'client_credentials');
         params.append('scope', 'tpay');
 
-        // გამოიყენე sandbox მისამართი ტოკენისთვის
         const response = await axios.post('https://sandbox.api.tbcbank.ge/v1/tpay/token', params, {
             headers: { 
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'apikey': process.env.TBC_CLIENT_ID
-            }
+            },
+            httpsAgent: httpsAgent // 👈 აიგნორირებს სერტიფიკატის შეუსაბამობას
         });
         return response.data.access_token;
     } catch (error) {
@@ -33,7 +39,7 @@ const getTbcToken = async () => {
     }
 };
 
-// --- 💳 1. გადახდის დაწყება ---
+// --- 💳 1. გადახდის დაწყება (Frontend-ისთვის) ---
 router.post('/tbc/create/:id', async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
@@ -50,13 +56,13 @@ router.post('/tbc/create/:id', async (req, res) => {
             extraId: order._id.toString() 
         };
 
-        // ⚠️ მნიშვნელოვანი: აქაც sandbox.api... უნდა ეწეროს!
         const response = await axios.post('https://sandbox.api.tbcbank.ge/v1/tpay/payments', paymentBody, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
                 'apikey': process.env.TBC_CLIENT_ID
-            }
+            },
+            httpsAgent: httpsAgent // 👈 აქაც აუცილებელია
         });
 
         if (response.data.links && response.data.links[1]) {
@@ -74,7 +80,7 @@ router.post('/tbc/create/:id', async (req, res) => {
     }
 });
 
-// --- ✅ 2. CALLBACK ---
+// --- ✅ 2. CALLBACK (ამას იძახებს ბანკი გადახდის შემდეგ) ---
 router.post('/callback', async (req, res) => {
     const { paymentId, status, extraId } = req.body;
 
@@ -88,15 +94,23 @@ router.post('/callback', async (req, res) => {
                 order.paymentResult = { id: paymentId, status: status };
                 await order.save();
 
+                // მეილების გაგზავნა
                 await resend.emails.send({
                     from: 'N.T.Style <info@ntstyle.ge>',
                     to: ['amiamo757@gmail.com', order.user.email],
                     subject: `შეკვეთა გადახდილია! #${order._id.toString().slice(-6)}`,
-                    html: `<h2>გადახდა დადასტურებულია! 🎉</h2><p>თანხა: ${order.totalPrice} GEL</p>`
+                    html: `
+                        <h2>გადახდა დადასტურებულია! 🎉</h2>
+                        <p>მომხმარებელი: ${order.user.name}</p>
+                        <p>თანხა: ${order.totalPrice} GEL</p>
+                        <p>შეკვეთა გადავიდა მომზადების ეტაპზე.</p>
+                    `
                 });
+                console.log(`✅ Order ${extraId} marked as paid and emails sent.`);
             }
         }
         res.status(200).send('OK');
+
     } catch (error) {
         console.error("❌ Callback Error:", error.message);
         res.status(500).send('Internal Error');
