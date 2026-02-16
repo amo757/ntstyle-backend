@@ -10,20 +10,20 @@ dotenv.config();
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// --- 🔑 TBC ტოკენის აღება ---
+// --- 🔑 TBC ტოკენის აღება (Sandbox) ---
 const getTbcToken = async () => {
     try {
         const params = new URLSearchParams();
-        // გამოიყენე .env-ში არსებული ზუსტი სახელები
         params.append('client_id', process.env.TBC_CLIENT_ID); 
         params.append('client_secret', process.env.TBC_CLIENT_SECRET);
         params.append('grant_type', 'client_credentials');
         params.append('scope', 'tpay');
 
-        const response = await axios.post('https://api.tbcbank.ge/v1/tpay/token', params, {
+        // გამოიყენე sandbox მისამართი ტოკენისთვის
+        const response = await axios.post('https://sandbox.api.tbcbank.ge/v1/tpay/token', params, {
             headers: { 
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'apikey': process.env.TBC_CLIENT_ID // ზოგჯერ აქაც სჭირდება apikey
+                'apikey': process.env.TBC_CLIENT_ID
             }
         });
         return response.data.access_token;
@@ -33,7 +33,7 @@ const getTbcToken = async () => {
     }
 };
 
-// --- 💳 1. გადახდის დაწყება (Frontend-ისთვის) ---
+// --- 💳 1. გადახდის დაწყება ---
 router.post('/tbc/create/:id', async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
@@ -47,15 +47,15 @@ router.post('/tbc/create/:id', async (req, res) => {
             callback_url: `https://ntstyle-api.onrender.com/api/payments/callback`,
             methods: [5, 7],
             description: `Order #${order._id}`,
-            // extraId გამოიყენება callback-ის დროს შეკვეთის საპოვნელად
             extraId: order._id.toString() 
         };
 
-        const response = await axios.post('https://api.tbcbank.ge/v1/tpay/payments', paymentBody, {
+        // ⚠️ მნიშვნელოვანი: აქაც sandbox.api... უნდა ეწეროს!
+        const response = await axios.post('https://sandbox.api.tbcbank.ge/v1/tpay/payments', paymentBody, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
-                'apikey': process.env.TBC_CLIENT_ID // 4055847
+                'apikey': process.env.TBC_CLIENT_ID
             }
         });
 
@@ -66,7 +66,6 @@ router.post('/tbc/create/:id', async (req, res) => {
         }
 
     } catch (error) {
-        // ეს დაგვეხმარება Render-ის ლოგებში ვნახოთ რეალური შეცდომა
         console.error("❌ TBC ERROR DETAILS:", error.response?.data || error.message);
         res.status(500).json({ 
             message: "TBC Payment Error", 
@@ -75,41 +74,29 @@ router.post('/tbc/create/:id', async (req, res) => {
     }
 });
 
-// --- ✅ 2. CALLBACK (ამას იძახებს ბანკი გადახდის შემდეგ) ---
+// --- ✅ 2. CALLBACK ---
 router.post('/callback', async (req, res) => {
-    const { paymentId, status, extraId } = req.body; // extraId არის ჩვენი Order ID
+    const { paymentId, status, extraId } = req.body;
 
     try {
-        // თუ გადახდა წარმატებულია ('Succeeded' TBC-ს ტერმინოლოგიით)
         if (status === 'Succeeded') {
             const order = await Order.findById(extraId).populate('user', 'name email');
 
             if (order && !order.isPaid) {
-                // 1. განვაახლოთ ბაზაში შეკვეთა
                 order.isPaid = true;
                 order.paidAt = Date.now();
                 order.paymentResult = { id: paymentId, status: status };
                 await order.save();
 
-                // 2. გავაგზავნოთ მეილი მხოლოდ ახლა!
                 await resend.emails.send({
                     from: 'N.T.Style <info@ntstyle.ge>',
                     to: ['amiamo757@gmail.com', order.user.email],
                     subject: `შეკვეთა გადახდილია! #${order._id.toString().slice(-6)}`,
-                    html: `
-                        <h2>გადახდა დადასტურებულია! 🎉</h2>
-                        <p>მომხმარებელი: ${order.user.name}</p>
-                        <p>თანხა: ${order.totalPrice} GEL</p>
-                        <p>შეკვეთა გადავიდა მომზადების ეტაპზე.</p>
-                    `
+                    html: `<h2>გადახდა დადასტურებულია! 🎉</h2><p>თანხა: ${order.totalPrice} GEL</p>`
                 });
-                console.log(`✅ Order ${extraId} marked as paid and emails sent.`);
             }
         }
-        
-        // ბანკს ყოველთვის უნდა დავუბრუნოთ OK პასუხი
         res.status(200).send('OK');
-
     } catch (error) {
         console.error("❌ Callback Error:", error.message);
         res.status(500).send('Internal Error');
