@@ -70,44 +70,48 @@ const connectDB = async () => {
 connectDB();
 
 // ---------------------------------------------------------
-// 4. სატესტო მეილის როუტერი (Brevo Debugger)
+// 4. სატესტო მეილის როუტერი (Gmail + App Password)
 // ---------------------------------------------------------
 app.get('/test-email', async (req, res) => {
-  // ვიღებთ Render-ში გაწერილ ახალ ცვლადებს
-  const { EMAIL_USER, EMAIL_PASS, EMAIL_HOST, EMAIL_PORT } = process.env;
+  // ვიღებთ .env-დან შენს ახალ მეილს და კოდს
+  const { EMAIL_USER, EMAIL_PASS } = process.env;
 
   res.setHeader('Content-Type', 'text/html');
-  res.write(`<h1>📧 Brevo Email Debugger</h1>`);
-  res.write(`<p>Host: ${EMAIL_HOST}</p>`);
-  res.write(`<p>Port: ${EMAIL_PORT}</p>`);
+  res.write(`<h1>📧 Gmail App Password Tester</h1>`);
+  
+  if (!EMAIL_USER || !EMAIL_PASS) {
+      res.write(`<h2 style="color:red">❌ Error: .env variables missing!</h2>`);
+      res.write(`<p>Make sure EMAIL_USER and EMAIL_PASS are set in your .env file.</p>`);
+      return res.end();
+  }
+
+  res.write(`<p>User: ${EMAIL_USER} (Trying to connect...)</p>`);
   
   try {
-    // ⚠️ აქ უკვე ვიყენებთ დინამიურ ცვლადებს და არა hardcoded Gmail-ს
+    // ⚠️ აქ უკვე ვიყენებთ Gmail-ის სერვისს
     const transporter = nodemailer.createTransport({
-      host: EMAIL_HOST, // smtp-relay.brevo.com
-      port: Number(EMAIL_PORT), // 587
-      secure: false, // 587-ისთვის false
+      service: 'gmail',
       auth: {
-        user: EMAIL_USER, // შენი Brevo Login ID
-        pass: EMAIL_PASS, // შენი Brevo API Key
+        user: EMAIL_USER, // აქ ჩაჯდება amiamo757@gmail.com
+        pass: EMAIL_PASS, // აქ ჩაჯდება 16-ნიშნა კოდი
       },
     });
 
-    res.write(`<p>🔌 Connecting to Brevo SMTP...</p>`);
+    res.write(`<p>🔌 Verifying Gmail Connection...</p>`);
     await transporter.verify();
     res.write(`<p style="color:green; font-weight:bold;">✅ Connection Verified!</p>`);
 
-    res.write(`<p>📨 Sending test email...</p>`);
+    res.write(`<p>📨 Sending test email to yourself...</p>`);
     
-    // გაგზავნა
+    // გაგზავნა საკუთარ თავთან
     await transporter.sendMail({
-      from: `"Test Debugger" <natiatkhelidze.n.t.style@gmail.com>`, // ლამაზად გამოჩენისთვის
-      to: "natiatkhelidze.n.t.style@gmail.com", // პირდაპირ შენთან მოვა
-      subject: "Test Email from Render (via Brevo)",
-      html: "<h3>It Works! 🎉</h3><p>Brevo SMTP is working perfectly.</p>"
+      from: `"N.T.Style Admin" <${EMAIL_USER}>`, 
+      to: EMAIL_USER, // საკუთარ თავს ვუგზავნით ტესტს
+      subject: "Test Email from Server (Gmail App Password)",
+      html: "<h3>It Works! 🎉</h3><p>Your Gmail App Password setup is correct.</p>"
     });
 
-    res.write(`<h2 style="color:green">🎉 SUCCESS! Email Sent.</h2>`);
+    res.write(`<h2 style="color:green">🎉 SUCCESS! Email Sent. Check your Inbox.</h2>`);
     res.end();
 
   } catch (error) {
