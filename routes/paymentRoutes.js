@@ -12,16 +12,25 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // --- 🔑 TBC ტოკენის აღება ---
 const getTbcToken = async () => {
-    const params = new URLSearchParams();
-    params.append('client_id', process.env.TBC_CLIENT_ID);
-    params.append('client_secret', process.env.TBC_CLIENT_SECRET);
-    params.append('grant_type', 'client_credentials');
-    params.append('scope', 'tpay');
+    try {
+        const params = new URLSearchParams();
+        // გამოიყენე .env-ში არსებული ზუსტი სახელები
+        params.append('client_id', process.env.TBC_CLIENT_ID); 
+        params.append('client_secret', process.env.TBC_CLIENT_SECRET);
+        params.append('grant_type', 'client_credentials');
+        params.append('scope', 'tpay');
 
-    const response = await axios.post('https://api.tbcbank.ge/v1/tpay/token', params, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-    return response.data.access_token;
+        const response = await axios.post('https://api.tbcbank.ge/v1/tpay/token', params, {
+            headers: { 
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'apikey': process.env.TBC_CLIENT_ID // ზოგჯერ აქაც სჭირდება apikey
+            }
+        });
+        return response.data.access_token;
+    } catch (error) {
+        console.error("TOKEN ERROR:", error.response?.data || error.message);
+        throw new Error("ბანკის ავტორიზაციის შეცდომა");
+    }
 };
 
 // --- 💳 1. გადახდის დაწყება (Frontend-ისთვის) ---
