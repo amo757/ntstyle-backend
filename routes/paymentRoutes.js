@@ -85,3 +85,4 @@ router.post('/tbc/create/:id', async (req, res) => {
         });
     }
 });
+export default router;
