@@ -7,9 +7,6 @@ dotenv.config();
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// @desc    Create new order
-// @route   POST /api/orders
-// @access  Private
 const addOrderItems = asyncHandler(async (req, res) => {
   const {
     orderItems,
@@ -42,45 +39,62 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // 📧 მეილების გაგზავნა
+    // 📧 პროდუქტების სიის გენერაცია HTML-ისთვის
+    const itemsListHtml = orderItems.map(item => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.qty} x ${item.price} GEL</td>
+      </tr>
+    `).join('');
+
     try {
-      console.log("🚀 Attempting to send emails via Resend API...");
+      console.log("🚀 Attempting to send order report to admin and user...");
 
       await resend.emails.send({
-        // ✅ შეცვლილია რეალურ დომენზე, რადგან უკვე Verified ხარ
-        from: 'N.T.Style <info@ntstyle.ge>', 
-        to: ['amiamo757@gmail.com', req.user.email], 
-        subject: `ახალი შეკვეთა! #${createdOrder._id}`,
+        from: 'N.T.Style <info@ntstyle.ge>', // შენი Verified დომენი
+        to: ['amiamo757@gmail.com', req.user.email], // მეილი მოგივა შენც და კლიენტსაც
+        subject: `ახალი შეკვეთა! #${createdOrder._id} - ${req.user.name}`,
         html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; max-width: 600px; margin: auto;">
-            <h2 style="color: #333; text-align: center;">მადლობა შეკვეთისთვის! 🎉</h2>
-            <p>მოგესალმებით <strong>${req.user.name}</strong>,</p>
-            <p>თქვენი შეკვეთა <strong>#${createdOrder._id}</strong> წარმატებით მიღებულია და გადაცემულია დასამუშავებლად.</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px;">
+            <h2 style="color: #333; text-align: center;">ახალი შეკვეთის დეტალები 🎉</h2>
             
-            <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p><strong>ჯამური თანხა:</strong> ${createdOrder.totalPrice} GEL</p>
-              <p><strong>მისამართი:</strong> ${shippingAddress.address}, ${shippingAddress.city}</p>
-              <p><strong>გადახდის მეთოდი:</strong> ${paymentMethod}</p>
+            <h4 style="background: #f4f4f4; padding: 10px;">👤 მყიდველის ინფორმაცია:</h4>
+            <p><strong>სახელი:</strong> ${req.user.name}</p>
+            <p><strong>ელ-ფოსტა:</strong> ${req.user.email}</p>
+            <p><strong>ტელეფონი:</strong> ${shippingAddress.postalCode || 'არ არის მითითებული'}</p>
+            <p><strong>მისამართი:</strong> ${shippingAddress.address}, ${shippingAddress.city}</p>
+
+            <h4 style="background: #f4f4f4; padding: 10px;">📦 შეკვეთილი პროდუქტები:</h4>
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background: #eee;">
+                  <th style="padding: 10px; text-align: left;">პროდუქტი</th>
+                  <th style="padding: 10px; text-align: center;">რაოდენობა/ფასი</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsListHtml}
+              </tbody>
+            </table>
+
+            <div style="margin-top: 20px; text-align: right; font-size: 18px;">
+              <strong>ჯამური თანხა: <span style="color: #e44d26;">${totalPrice} GEL</span></strong>
             </div>
 
-            <hr style="border: none; border-top: 1px solid #eee;" />
+            <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;" />
             <p style="text-align: center;">
               <a href="https://ntstyle.ge/order/${createdOrder._id}" 
-                 style="background: #000; color: #fff; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">
-                 შეკვეთის დეტალები
+                 style="background: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                 ადმინ პანელში ნახვა
               </a>
-            </p>
-            <p style="font-size: 12px; color: #777; margin-top: 30px; text-align: center;">
-              ეს არის ავტომატური შეტყობინება, გთხოვთ ნუ უპასუხებთ.<br/>
-              © 2026 N.T.Style
             </p>
           </div>
         `,
       });
 
-      console.log("✅ Email sent successfully via Resend!");
+      console.log("✅ Order details sent to admin!");
     } catch (error) {
-      console.error("❌ Resend API Error:", error.message);
+      console.error("❌ Resend Error:", error.message);
     }
 
     res.status(201).json(createdOrder);
