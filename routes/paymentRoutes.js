@@ -1,8 +1,7 @@
 import express from 'express';
 import axios from 'axios';
-import https from 'https'; // 👈 აუცილებელია SSL-ის შეცდომის ასარიდებლად
+import https from 'https';
 import Order from '../models/orderModel.js';
-import User from '../models/UserModel.js';
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
@@ -11,12 +10,12 @@ dotenv.config();
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// SSL სერტიფიკატის ვალიდაციის დროებითი გათიშვა Sandbox-ისთვის
+// SSL-ის იგნორირება მხოლოდ სატესტო გარემოსთვის
 const httpsAgent = new https.Agent({ 
     rejectUnauthorized: false 
 });
 
-// --- 🔑 TBC ტოკენის აღება (Sandbox) ---
+// --- 🔑 TBC ტოკენის აღება ---
 const getTbcToken = async () => {
     try {
         const params = new URLSearchParams();
@@ -30,29 +29,35 @@ const getTbcToken = async () => {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'apikey': process.env.TBC_CLIENT_ID
             },
-            httpsAgent: httpsAgent // 👈 აიგნორირებს სერტიფიკატის შეუსაბამობას
+            httpsAgent: httpsAgent
         });
         return response.data.access_token;
     } catch (error) {
         console.error("TOKEN ERROR:", error.response?.data || error.message);
-        throw new Error("ბანკის ავტორიზაციის შეცდომა");
+        throw error;
     }
 };
 
-// --- 💳 1. გადახდის დაწყება (Frontend-ისთვის) ---
+// --- 💳 1. გადახდის შექმნა ---
 router.post('/tbc/create/:id', async (req, res) => {
     try {
+        // 1. ვპოულობთ შეკვეთას
         const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ message: "Order not found" });
+        if (!order) return res.status(404).json({ message: "შეკვეთა ვერ მოიძებნა" });
 
+        // 2. ვიღებთ ტოკენს ბანკიდან
         const token = await getTbcToken();
 
+        // 3. ვამზადებთ ბანკისთვის მონაცემებს
         const paymentBody = {
-            amount: { currency: 'GEL', total: order.totalPrice },
+            amount: { 
+                currency: 'GEL', 
+                total: parseFloat(order.totalPrice).toFixed(2) // აუცილებელია იყოს ციფრი 2 ნიშნით
+            },
             return_url: `https://ntstyle.ge/order/${order._id}`,
             callback_url: `https://ntstyle-api.onrender.com/api/payments/callback`,
-            methods: [5, 7],
-            description: `Order #${order._id}`,
+            methods: [5, 7], // ბარათი და Apple/Google Pay
+            description: `Order #${order._id.toString().slice(-6)}`,
             extraId: order._id.toString() 
         };
 
@@ -62,59 +67,21 @@ router.post('/tbc/create/:id', async (req, res) => {
                 'Content-Type': 'application/json',
                 'apikey': process.env.TBC_CLIENT_ID
             },
-            httpsAgent: httpsAgent // 👈 აქაც აუცილებელია
+            httpsAgent: httpsAgent
         });
 
-        if (response.data.links && response.data.links[1]) {
-            res.json({ checkout_url: response.data.links[1].uri });
+        if (response.data.links && response.data.links.find(l => l.method === 'REDIRECT')) {
+            const redirectLink = response.data.links.find(l => l.method === 'REDIRECT').uri;
+            res.json({ checkout_url: redirectLink });
         } else {
-            res.status(400).json({ message: "Bank did not return redirect link" });
+            res.status(400).json({ message: "ბანკმა არ დააბრუნა გადახდის ბმული" });
         }
 
     } catch (error) {
-        console.error("❌ TBC ERROR DETAILS:", error.response?.data || error.message);
+        console.error("❌ TBC API ERROR:", error.response?.data || error.message);
         res.status(500).json({ 
-            message: "TBC Payment Error", 
-            details: error.response?.data 
+            message: "გადახდის ინიციალიზაცია ვერ მოხერხდა",
+            error: error.response?.data || error.message
         });
     }
 });
-
-// --- ✅ 2. CALLBACK (ამას იძახებს ბანკი გადახდის შემდეგ) ---
-router.post('/callback', async (req, res) => {
-    const { paymentId, status, extraId } = req.body;
-
-    try {
-        if (status === 'Succeeded') {
-            const order = await Order.findById(extraId).populate('user', 'name email');
-
-            if (order && !order.isPaid) {
-                order.isPaid = true;
-                order.paidAt = Date.now();
-                order.paymentResult = { id: paymentId, status: status };
-                await order.save();
-
-                // მეილების გაგზავნა
-                await resend.emails.send({
-                    from: 'N.T.Style <info@ntstyle.ge>',
-                    to: ['amiamo757@gmail.com', order.user.email],
-                    subject: `შეკვეთა გადახდილია! #${order._id.toString().slice(-6)}`,
-                    html: `
-                        <h2>გადახდა დადასტურებულია! 🎉</h2>
-                        <p>მომხმარებელი: ${order.user.name}</p>
-                        <p>თანხა: ${order.totalPrice} GEL</p>
-                        <p>შეკვეთა გადავიდა მომზადების ეტაპზე.</p>
-                    `
-                });
-                console.log(`✅ Order ${extraId} marked as paid and emails sent.`);
-            }
-        }
-        res.status(200).send('OK');
-
-    } catch (error) {
-        console.error("❌ Callback Error:", error.message);
-        res.status(500).send('Internal Error');
-    }
-});
-
-export default router;
