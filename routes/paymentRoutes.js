@@ -44,22 +44,34 @@ router.post('/tbc/create/:id', async (req, res) => {
         const paymentBody = {
             amount: { currency: 'GEL', total: order.totalPrice },
             return_url: `https://ntstyle.ge/order/${order._id}`,
-            callback_url: `https://ntstyle-api.onrender.com/api/payments/callback`, // 👈 შენი სერვერის რეალური URL
+            callback_url: `https://ntstyle-api.onrender.com/api/payments/callback`,
             methods: [5, 7],
             description: `Order #${order._id}`,
-            language: 'KA'
+            // extraId გამოიყენება callback-ის დროს შეკვეთის საპოვნელად
+            extraId: order._id.toString() 
         };
 
         const response = await axios.post('https://api.tbcbank.ge/v1/tpay/payments', paymentBody, {
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'apikey': process.env.TBC_CLIENT_ID
+                'Content-Type': 'application/json',
+                'apikey': process.env.TBC_CLIENT_ID // 4055847
             }
         });
 
-        res.json({ checkout_url: response.data.links[1].uri });
+        if (response.data.links && response.data.links[1]) {
+            res.json({ checkout_url: response.data.links[1].uri });
+        } else {
+            res.status(400).json({ message: "Bank did not return redirect link" });
+        }
+
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        // ეს დაგვეხმარება Render-ის ლოგებში ვნახოთ რეალური შეცდომა
+        console.error("❌ TBC ERROR DETAILS:", error.response?.data || error.message);
+        res.status(500).json({ 
+            message: "TBC Payment Error", 
+            details: error.response?.data 
+        });
     }
 });
 
