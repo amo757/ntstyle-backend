@@ -10,16 +10,17 @@ dotenv.config();
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// 🛑 შენი SANDBOX გასაღებები
+// 🛑 შენი გასაღებები (გადაამოწმე developers.tbcbank.ge-ზე!)
 const TBC_ID = 'aAvS5nigREZqTHxTbx4ELhjXwtaRe8sy';
 const TBC_SECRET = '5PXzRQNR5xTiEcaK8F3LHcmmERLortie';
 
-const TBC_BASE_URL = 'https://sandbox.api.tbcbank.ge/v1/tpay';
+// 🛑 ვბრუნდებით მთავარ URL-ზე, რადგან sandbox ლინკი მკვდარია
+const TBC_BASE_URL = 'https://api.tbcbank.ge/v1/tpay';
 
-// 🛑 "ბრმა" აგენტი - თიშავს ყველანაირ SSL შემოწმებას
+// SSL პრობლემის პრევენცია
 const ignoreSslAgent = new https.Agent({  
   rejectUnauthorized: false,
-  checkServerIdentity: () => undefined // 👈 ეს ხაზი აგვარებს Hostname error-ს
+  checkServerIdentity: () => undefined 
 });
 
 // --- 🔑 TBC ტოკენის აღება ---
@@ -29,25 +30,29 @@ const getTbcToken = async () => {
         params.append('client_id', TBC_ID);
         params.append('client_secret', TBC_SECRET);
         
-        console.log("⏳ (Sandbox) ტოკენის მოთხოვნა...");
+        console.log(`⏳ ტოკენის მოთხოვნა მისამართზე: ${TBC_BASE_URL}/access-token`);
+        console.log(`🔑 ვიყენებთ Client ID-ს: ${TBC_ID.substring(0, 5)}...`);
 
         const response = await axios.post(`${TBC_BASE_URL}/access-token`, params, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'apikey': TBC_ID
+                'apikey': TBC_ID // TBC V1 მოითხოვს ამ ჰედერს
             },
-            httpsAgent: ignoreSslAgent // 👈 ვიყენებთ აგენტს
+            httpsAgent: ignoreSslAgent
         });
 
-        console.log("✅ ტოკენი მიღებულია!");
+        console.log("✅ ტოკენი წარმატებით მიღებულია!");
         return response.data.access_token;
 
     } catch (error) {
-        // აქ დავბეჭდავთ ზუსტ მიზეზს
-        console.error("TOKEN ERROR DETAILED:", error.code || error.message);
-        if (error.response) console.error("Response Data:", error.response.data);
-        
-        throw new Error("ბანკთან კავშირი ვერ დამყარდა (Sandbox)");
+        // აქ ზუსტად გავიგებთ რა ხდება
+        if (error.response) {
+            console.error("❌ TBC ERROR RESPONSE:", JSON.stringify(error.response.data, null, 2));
+            console.error("❌ STATUS CODE:", error.response.status);
+        } else {
+            console.error("❌ CONNECTION ERROR:", error.message);
+        }
+        throw new Error("ბანკთან კავშირი ვერ დამყარდა");
     }
 };
 
@@ -69,7 +74,7 @@ router.post('/tbc/create/:id', async (req, res) => {
             extraId: order._id.toString()
         };
 
-        console.log("⏳ (Sandbox) გადახდის შექმნა...");
+        console.log("⏳ გადახდის შექმნა...");
 
         const response = await axios.post(`${TBC_BASE_URL}/payments`, paymentBody, {
             headers: {
@@ -77,7 +82,7 @@ router.post('/tbc/create/:id', async (req, res) => {
                 'Content-Type': 'application/json',
                 'apikey': TBC_ID
             },
-            httpsAgent: ignoreSslAgent // 👈 აქაც იგივე აგენტი
+            httpsAgent: ignoreSslAgent
         });
 
         console.log("✅ გადახდა შეიქმნა:", response.data);
@@ -91,14 +96,39 @@ router.post('/tbc/create/:id', async (req, res) => {
 
     } catch (error) {
         console.error("PAYMENT ERROR:", error.message);
+        if(error.response) console.error("Details:", error.response.data);
         res.status(500).json({ message: "Payment Failed" });
     }
 });
 
-// Callback იგივე რჩება...
+// --- ✅ 2. CALLBACK ---
 router.post('/callback', async (req, res) => {
-    // ... (იგივე კოდი რაც გქონდა)
-    res.status(200).send('OK');
+    try {
+        const { status, extraId } = req.body;
+        console.log(`Callback მოსულია: ${status} შეკვეთაზე ${extraId}`);
+
+        if (status === 'Succeeded') {
+            const order = await Order.findById(extraId).populate('user');
+            if (order && !order.isPaid) {
+                order.isPaid = true;
+                order.paidAt = Date.now();
+                await order.save();
+                
+                if(order.user?.email) {
+                    await resend.emails.send({
+                        from: 'N.T.Style <info@ntstyle.ge>',
+                        to: ['amiamo757@gmail.com', order.user.email],
+                        subject: `გადახდილია!`,
+                        html: `<p>შეკვეთა #${order._id} წარმატებით გადახდილია.</p>`
+                    });
+                }
+            }
+        }
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error("Callback Error:", error);
+        res.status(500).send('Error');
+    }
 });
 
 export default router;
