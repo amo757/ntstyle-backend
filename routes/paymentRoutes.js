@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import https from 'https'; // 👈 ეს დავამატეთ
 import Order from '../models/orderModel.js';
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
@@ -9,12 +10,16 @@ dotenv.config();
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// 🛑 შენი გასაღებები (SANDBOX)
+// 🛑 შენი SANDBOX გასაღებები
 const TBC_ID = 'aAvS5nigREZqTHxTbx4ELhjXwtaRe8sy';
 const TBC_SECRET = '5PXzRQNR5xTiEcaK8F3LHcmmERLortie';
 
-// 🛑 SANDBOX URL-ები
 const TBC_BASE_URL = 'https://sandbox.api.tbcbank.ge/v1/tpay';
+
+// 🛑 SSL პრობლემის მოსაგვარებელი აგენტი (მხოლოდ Sandbox-ისთვის!)
+const ignoreSslAgent = new https.Agent({  
+  rejectUnauthorized: false
+});
 
 // --- 🔑 TBC ტოკენის აღება ---
 const getTbcToken = async () => {
@@ -29,7 +34,8 @@ const getTbcToken = async () => {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'apikey': TBC_ID
-            }
+            },
+            httpsAgent: ignoreSslAgent // 👈 აი აქ ვიყენებთ აგენტს
         });
 
         console.log("✅ ტოკენი მიღებულია!");
@@ -50,11 +56,11 @@ router.post('/tbc/create/:id', async (req, res) => {
         // 1. ტოკენის აღება
         const token = await getTbcToken();
 
-        // 2. გადახდის მოთხოვნა (Sandbox)
+        // 2. გადახდის მოთხოვნა
         const paymentBody = {
             amount: { currency: 'GEL', total: parseFloat(order.totalPrice).toFixed(2) },
-            return_url: `https://ntstyle.ge/order/${order._id}`,
-            callback_url: `https://ntstyle-api.onrender.com/api/payments/callback`,
+            return_url: `https://ntstyle.ge/order/${order._id}`, // აქ დაბრუნდება კლიენტი
+            callback_url: `https://ntstyle-api.onrender.com/api/payments/callback`, // აქ მოვა დასტური
             methods: [5, 7], 
             extraId: order._id.toString()
         };
@@ -66,11 +72,13 @@ router.post('/tbc/create/:id', async (req, res) => {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
                 'apikey': TBC_ID
-            }
+            },
+            httpsAgent: ignoreSslAgent // 👈 აქაც აგენტი
         });
 
         console.log("✅ გადახდა შეიქმნა:", response.data);
 
+        // ლინკის პოვნა და დაბრუნება
         if (response.data.links) {
             const redirectLink = response.data.links.find(link => link.method === 'REDIRECT')?.uri;
             res.json({ checkout_url: redirectLink || response.data.links[0].uri });
@@ -87,7 +95,7 @@ router.post('/tbc/create/:id', async (req, res) => {
 // --- ✅ 2. CALLBACK ---
 router.post('/callback', async (req, res) => {
     try {
-        const { status, extraId, paymentId } = req.body;
+        const { status, extraId } = req.body;
         console.log(`Callback მოსულია: ${status} შეკვეთაზე ${extraId}`);
 
         if (status === 'Succeeded') {
@@ -97,7 +105,7 @@ router.post('/callback', async (req, res) => {
                 order.paidAt = Date.now();
                 await order.save();
                 
-                // მეილი
+                // მეილი ადმინს და მომხმარებელს
                 if(order.user?.email) {
                     await resend.emails.send({
                         from: 'N.T.Style <info@ntstyle.ge>',
