@@ -3,31 +3,34 @@ import crypto from 'crypto';
 
 const router = express.Router();
 
-// 🔑 აქ ჩაწერე შენი Flitt-ის რეალური მონაცემები 
-// (ან აჯობებს პირდაპირ .env-ში გქონდეს და process.env.FLITT_MERCHANT_ID-ით იღებდე)
-const FLITT_MERCHANT_ID = "4055847";
-const FLITT_SECRET_KEY = "5PXzRQNR5xTiEcaK8F3LHcmmERLortie";
-
 router.post('/create-payment', async (req, res) => {
     try {
-        // ✅ აღარ გვინდა JSON.parse(). პირდაპირ ვიღებთ ფრონტიდან გამოგზავნილ ინფორმაციას:
         const { orderId, amount } = req.body;
+        
+        // 1. ვიღებთ მონაცემებს .env-დან (Render-იდან)
+        const merchantId = process.env.FLITT_MERCHANT_ID;
+        const secretKey = process.env.FLITT_SECRET_KEY;
 
-        // ⚠️ Flitt-ს თანხა სჭირდება თეთრებში (მაგ: 15.50 ლარი უნდა გაიგზავნოს როგორც 1550)
-        // ამიტომ ფრონტიდან მოსულ თანხას ვამრავლებთ 100-ზე და ვამრგვალებთ
+        // დამცველი: თუ ვერ იპოვა, ერორს ამოაგდებს
+        if (!merchantId || !secretKey) {
+             console.error("❌ ერორი: Flitt-ის მონაცემები ვერ მოიძებნა Environment-ში!");
+             return res.status(500).json({ success: false, message: "სერვერის კონფიგურაციის შეცდომა" });
+        }
+
         const flittAmount = Math.round(amount * 100);
 
+        // 2. ვაგზავნით მონაცემებს
         const requestData = {
-            merchant_id: FLITT_MERCHANT_ID,
-            order_id: orderId, // ვატანთ რეალურ შეკვეთის ID-ს
-            amount: flittAmount, // ვატანთ რეალურ თანხას თეთრებში
+            merchant_id: merchantId,
+            order_id: orderId,
+            amount: flittAmount,
             currency: "GEL",
             order_desc: "N.T.Style - შეკვეთა #" + orderId
         };
 
         const keys = Object.keys(requestData).sort();
         
-        let signString = FLITT_SECRET_KEY;
+        let signString = secretKey;
         for (const key of keys) {
             if (requestData[key] !== "" && requestData[key] !== null) {
                 signString += "|" + requestData[key];
@@ -47,6 +50,7 @@ router.post('/create-payment', async (req, res) => {
 
         const data = await response.json();
 
+        // 3. ვამოწმებთ Flitt-ის პასუხს
         if (data.response && data.response.response_status === 'success') {
             res.status(200).json({
                 success: true,
@@ -54,13 +58,13 @@ router.post('/create-payment', async (req, res) => {
                 paymentId: data.response.payment_id
             });
         } else {
-            console.error("Flitt API Error:", data);
-            res.status(400).json({ success: false, message: "ვერ მოხერხდა ლინკის გენერაცია", details: data });
+            // ⚠️ ეს არის ყველაზე მთავარი ხაზი ახლა: 
+            console.error("❌ Flitt API-მ დაიწუნა მოთხოვნა. დეტალები:", JSON.stringify(data, null, 2));
+            res.status(400).json({ success: false, message: "ვერ მოხერხდა გადახდის ლინკის გენერაცია", details: data });
         }
 
     } catch (error) {
-        // ერორის ლოგირება, რომ ზუსტად დავინახოთ რაშია საქმე თუ კიდევ გაფუჭდა
-        console.error("Server Error in /create-payment:", error);
+        console.error("❌ Server Error in /create-payment:", error);
         res.status(500).json({ success: false, message: "სერვერის შიდა შეცდომა", error: error.message });
     }
 });
