@@ -7,14 +7,11 @@ router.post('/create-payment', async (req, res) => {
     try {
         const { orderId, amount } = req.body;
         
-        const merchantIdStr = process.env.FLITT_MERCHANT_ID?.trim();
-        const secretKey = process.env.FLITT_SECRET_KEY?.trim();
+        // ⚠️ მონაცემები მივუთითეთ პირდაპირ (Hardcoded), რადგან ამან Postman-ში 100% იმუშავა
+        const merchantId = 4055847; 
+        const secretKey = "aAvS5nigREZqTHxTbx4ELhjXwtaRe8sy"; // 👈 ნამდვილი, სწორი გასაღები!
 
-        if (!merchantIdStr || !secretKey) {
-             return res.status(500).json({ success: false, message: "სერვერის კონფიგურაციის შეცდომა" });
-        }
-
-        const merchantId = parseInt(merchantIdStr, 10); 
+        // თანხის გადაყვანა თეთრებში (Flitt ყოველთვის თეთრებში ითხოვს)
         const flittAmount = Math.round(amount * 100);
 
         const requestData = {
@@ -24,7 +21,7 @@ router.post('/create-payment', async (req, res) => {
             order_desc: "Order_" + orderId, 
             order_id: orderId.toString(),
             response_url: "https://ntstyle.ge/order/" + orderId,
-            // ⚠️ დავამატეთ callback ლინკი (ბანკი აქ ფარულად გამოაგზავნის სტატუსს გადახდის მერე)
+            // ბანკი აქ ფარულად გამოაგზავნის სტატუსს გადახდის მერე
             server_callback_url: "https://ntstyle-api.onrender.com/api/payment/callback"
         };
 
