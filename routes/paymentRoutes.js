@@ -1,79 +1,69 @@
-import express from 'express';
-import axios from 'axios';
-import crypto from 'crypto'; 
-import Order from '../models/orderModel.js';
+const express = require('express');
+const crypto = require('crypto'); // Node.js-ის ჩაშენებული მოდული შიფრაციისთვის
+// თუ axios-ს იყენებ, დაგჭირდება: const axios = require('axios');
+// თუ Node 18+ გაქვს, ჩაშენებული fetch-იც იმუშავებს. აქ fetch-ით დაგიწერ.
 
 const router = express.Router();
 
-const FLITT_SECRET = 'შენი_FLITT_SECRET_KEY'; // ჩასვი შენი ახალი პაროლი
-const FLITT_MERCHANT_ID = 1549901; // ჩასვი შენი ახალი ID
+// 🔑 აქ ჩაწერე შენი Flitt-ის მონაცემები
+const FLITT_MERCHANT_ID = "4055847";
+const FLITT_SECRET_KEY = "5PXzRQNR5xTiEcaK8F3LHcmmERLortie";
 
-router.post('/tbc/create/:id', async (req, res) => {
+router.post('/create-payment', async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ message: "შეკვეთა ვერ მოიძებნა" });
-
-        const amountInTetri = Math.round(order.totalPrice * 100);
-
-        // 1. ვაგროვებთ ყველა საჭირო პარამეტრს
+        // 1. ვაგროვებთ გასაგზავნ მონაცემებს (აქ შეგიძლია ფასი ფრონტიდან მიიღო: req.body.amount)
         const requestData = {
-            amount: amountInTetri,
-            currency: "GEL",
             merchant_id: FLITT_MERCHANT_ID,
-            order_desc: "Website Order",  // 👈 შევცვალეთ ინგლისურით სტაბილურობისთვის
-            order_id: order._id.toString(),
-            response_url: `https://ntstyle.ge/order/${order._id}`, // 👈 მომხმარებლის დასაბრუნებელი ლინკი
-            server_callback_url: `https://ntstyle-api.onrender.com/api/payments/callback` // 👈 სერვერის ვებჰუკი
+            order_id: "order_" + Date.now(), // ყოველ ჯერზე უნიკალური ID რომ იყოს
+            amount: 1500, // 15.00 ლარი (თეთრებში)
+            currency: "GEL",
+            order_desc: "Test Payment from Node.js"
         };
 
-        // 2. ვქმნით Signature-ს
-        const sortedKeys = Object.keys(requestData).sort(); 
-        const valuesToHash = [FLITT_SECRET.trim()]; // .trim() აშორებს უჩინარ სფეისებს
-
-        for (let key of sortedKeys) {
-            // Flitt-ის მოთხოვნა: ცარიელი ველები არ უნდა მოხვდეს ჰეშში
-            if (requestData[key] !== '' && requestData[key] !== null) {
-                valuesToHash.push(String(requestData[key]).trim());
+        // 2. ვალაგებთ ველებს ანბანის მიხედვით
+        const keys = Object.keys(requestData).sort();
+        
+        // 3. ვაწყობთ სტრინგს ჰეშირებისთვის
+        let signString = FLITT_SECRET_KEY;
+        for (const key of keys) {
+            if (requestData[key] !== "" && requestData[key] !== null) {
+                signString += "|" + requestData[key];
             }
         }
 
-        const signatureString = valuesToHash.join('|');
+        // 4. ვაგენერირებთ SHA1 ჰეშს Node.js-ის crypto-თი
+        const signature = crypto.createHash('sha1').update(signString).digest('hex').toLowerCase();
         
-        // ლოგებში ვბეჭდავთ, რომ ზუსტად დავინახოთ რას ვაჰეშებთ
-        console.log("📝 სტრინგი, რომელიც იჰეშება:", signatureString);
+        // 5. ვამატებთ signature-ს მონაცემებში
+        requestData.signature = signature;
 
-        // ჰეშის გენერაცია (აუცილებლად lowercase, რასაც .digest('hex') ისედაც შვება)
-        requestData.signature = crypto.createHash('sha1').update(signatureString, 'utf8').digest('hex');
-        console.log("🔐 დაგენერირებული ჰეში:", requestData.signature);
-
-        // 3. ვაგზავნით მოთხოვნას
-        const response = await axios.post('https://pay.flitt.com/api/checkout/url', {
-            request: requestData
-        }, {
+        // 6. ვაგზავნით მოთხოვნას Flitt-ის სერვერზე
+        const response = await fetch('https://pay.flitt.com/api/checkout/url', {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify({ request: requestData })
         });
 
-        const checkoutUrl = response.data?.response?.checkout_url;
-        
-        if (checkoutUrl) {
-            res.json({ checkout_url: checkoutUrl });
+        const data = await response.json();
+
+        // 7. ვაბრუნებთ პასუხს ფრონტში (React, Vue, HTML და ა.შ.)
+        if (data.response && data.response.response_status === 'success') {
+            res.status(200).json({
+                success: true,
+                checkoutUrl: data.response.checkout_url,
+                paymentId: data.response.payment_id
+            });
         } else {
-            console.error("❌ ბანკის პასუხი ერორით:", response.data);
-            res.status(400).json({ detail: "ბანკმა გადახდის ბმული არ დააბრუნა", flitt_error: response.data });
+            console.error("Flitt Error:", data);
+            res.status(400).json({ success: false, message: "ვერ მოხერხდა ლინკის გენერაცია", details: data });
         }
 
     } catch (error) {
-        console.error("❌ PAYMENT ERROR:", error.response?.data || error.message);
-        res.status(500).json({ detail: "გადახდის ინიციალიზაცია ვერ მოხერხდა" });
+        console.error("Server Error:", error);
+        res.status(500).json({ success: false, message: "სერვერის შიდა შეცდომა" });
     }
 });
 
-// Callback ლოგიკა იგივე რჩება...
-router.post('/callback', async (req, res) => {
-    console.log("🔔 Flitt Callback მოვიდა:", req.body);
-    res.status(200).send('OK');
-});
-
-export default router;
+module.exports = router;
