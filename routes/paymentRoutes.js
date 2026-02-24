@@ -7,25 +7,28 @@ router.post('/create-payment', async (req, res) => {
     try {
         const { orderId, amount } = req.body;
         
-        // .trim() აშორებს ზედმეტ ჰარებს, თუ Render-ში შემთხვევით მიგვეწერა
-        const merchantId = process.env.FLITT_MERCHANT_ID?.trim();
+        const merchantIdStr = process.env.FLITT_MERCHANT_ID?.trim();
         const secretKey = process.env.FLITT_SECRET_KEY?.trim();
 
-        if (!merchantId || !secretKey) {
+        if (!merchantIdStr || !secretKey) {
              return res.status(500).json({ success: false, message: "სერვერის კონფიგურაციის შეცდომა" });
         }
 
+        // ⚠️ ვაქცევთ აუცილებლად რიცხვად (Integer), რადგან Flitt ასე ითხოვს
+        const merchantId = parseInt(merchantIdStr, 10); 
         const flittAmount = Math.round(amount * 100);
 
         const requestData = {
             amount: flittAmount,
             currency: "GEL",
             merchant_id: merchantId,
-            // ⚠️ ამოვიღეთ ქართული ასოები ენკოდინგის პრობლემის თავიდან ასარიდებლად
-            order_desc: "Order " + orderId, 
-            order_id: orderId.toString()
+            order_desc: "Order_" + orderId, // ⚠️ ამოვიღეთ 'Space' უსაფრთხოებისთვის
+            order_id: orderId.toString(),
+            // ⚠️ სად უნდა დაბრუნდეს კლიენტი ბანკის გვერდიდან (შეცვალე შენი საიტის დომენით, თუ საჭიროა)
+            response_url: "https://ntstyle.ge/order/" + orderId 
         };
 
+        // ალფავიტურად დალაგება და ჰეშის გენერაცია
         const keys = Object.keys(requestData).sort();
         
         let signString = secretKey;
@@ -35,7 +38,6 @@ router.post('/create-payment', async (req, res) => {
             }
         }
 
-        // ვაგენერირებთ ხელმოწერას utf8 ფორმატით
         const signature = crypto.createHash('sha1').update(signString, 'utf8').digest('hex').toLowerCase();
         requestData.signature = signature;
 
@@ -57,7 +59,7 @@ router.post('/create-payment', async (req, res) => {
             });
         } else {
             console.error("❌ Flitt API-მ დაიწუნა მოთხოვნა. დეტალები:", JSON.stringify(data, null, 2));
-            console.log("🔍 დასაშიფრი სტრინგი იყო:", signString); // ამას დავლოგავთ, რომ ვნახოთ რას ვაგზავნით
+            console.log("🔍 დასაშიფრი სტრინგი იყო:", signString);
             res.status(400).json({ success: false, message: "ვერ მოხერხდა გადახდის ლინკის გენერაცია", details: data });
         }
 
