@@ -34,7 +34,7 @@ router.post('/create-payment', async (req, res) => {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ request: requestData })
+            body: JSON.parse({ request: requestData })
         });
 
         const data = await response.json();
