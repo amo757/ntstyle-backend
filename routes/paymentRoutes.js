@@ -3,18 +3,26 @@ import crypto from 'crypto';
 
 const router = express.Router();
 
-// 🔑 აქ ჩაწერე შენი Flitt-ის რეალური მონაცემები
+// 🔑 აქ ჩაწერე შენი Flitt-ის რეალური მონაცემები 
+// (ან აჯობებს პირდაპირ .env-ში გქონდეს და process.env.FLITT_MERCHANT_ID-ით იღებდე)
 const FLITT_MERCHANT_ID = "4055847";
 const FLITT_SECRET_KEY = "5PXzRQNR5xTiEcaK8F3LHcmmERLortie";
 
 router.post('/create-payment', async (req, res) => {
     try {
+        // ✅ აღარ გვინდა JSON.parse(). პირდაპირ ვიღებთ ფრონტიდან გამოგზავნილ ინფორმაციას:
+        const { orderId, amount } = req.body;
+
+        // ⚠️ Flitt-ს თანხა სჭირდება თეთრებში (მაგ: 15.50 ლარი უნდა გაიგზავნოს როგორც 1550)
+        // ამიტომ ფრონტიდან მოსულ თანხას ვამრავლებთ 100-ზე და ვამრგვალებთ
+        const flittAmount = Math.round(amount * 100);
+
         const requestData = {
             merchant_id: FLITT_MERCHANT_ID,
-            order_id: "order_" + Date.now(),
-            amount: 1500, // 15.00 ლარი
+            order_id: orderId, // ვატანთ რეალურ შეკვეთის ID-ს
+            amount: flittAmount, // ვატანთ რეალურ თანხას თეთრებში
             currency: "GEL",
-            order_desc: "Test Payment from Node.js"
+            order_desc: "N.T.Style - შეკვეთა #" + orderId
         };
 
         const keys = Object.keys(requestData).sort();
@@ -34,7 +42,7 @@ router.post('/create-payment', async (req, res) => {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.parse({ request: requestData })
+            body: JSON.stringify({ request: requestData })
         });
 
         const data = await response.json();
@@ -46,15 +54,15 @@ router.post('/create-payment', async (req, res) => {
                 paymentId: data.response.payment_id
             });
         } else {
-            console.error("Flitt Error:", data);
+            console.error("Flitt API Error:", data);
             res.status(400).json({ success: false, message: "ვერ მოხერხდა ლინკის გენერაცია", details: data });
         }
 
     } catch (error) {
-        console.error("Server Error:", error);
-        res.status(500).json({ success: false, message: "სერვერის შიდა შეცდომა" });
+        // ერორის ლოგირება, რომ ზუსტად დავინახოთ რაშია საქმე თუ კიდევ გაფუჭდა
+        console.error("Server Error in /create-payment:", error);
+        res.status(500).json({ success: false, message: "სერვერის შიდა შეცდომა", error: error.message });
     }
 });
 
-// 🚀 მთავარი ცვლილება: ვაექსპორტებთ ES Modules წესით
 export default router;
