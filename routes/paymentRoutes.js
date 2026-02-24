@@ -14,7 +14,6 @@ router.post('/create-payment', async (req, res) => {
              return res.status(500).json({ success: false, message: "სერვერის კონფიგურაციის შეცდომა" });
         }
 
-        // ⚠️ ვაქცევთ აუცილებლად რიცხვად (Integer), რადგან Flitt ასე ითხოვს
         const merchantId = parseInt(merchantIdStr, 10); 
         const flittAmount = Math.round(amount * 100);
 
@@ -22,13 +21,13 @@ router.post('/create-payment', async (req, res) => {
             amount: flittAmount,
             currency: "GEL",
             merchant_id: merchantId,
-            order_desc: "Order_" + orderId, // ⚠️ ამოვიღეთ 'Space' უსაფრთხოებისთვის
+            order_desc: "Order_" + orderId, 
             order_id: orderId.toString(),
-            // ⚠️ სად უნდა დაბრუნდეს კლიენტი ბანკის გვერდიდან (შეცვალე შენი საიტის დომენით, თუ საჭიროა)
-            response_url: "https://ntstyle.ge/order/" + orderId 
+            response_url: "https://ntstyle.ge/order/" + orderId,
+            // ⚠️ დავამატეთ callback ლინკი (ბანკი აქ ფარულად გამოაგზავნის სტატუსს გადახდის მერე)
+            server_callback_url: "https://ntstyle-api.onrender.com/api/payment/callback"
         };
 
-        // ალფავიტურად დალაგება და ჰეშის გენერაცია
         const keys = Object.keys(requestData).sort();
         
         let signString = secretKey;
