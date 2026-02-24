@@ -1,42 +1,52 @@
 import express from 'express';
 import axios from 'axios';
-import crypto from 'crypto'; // 👈 დაემატა კრიპტოგრაფია Signature-სთვის
+import crypto from 'crypto'; 
 import Order from '../models/orderModel.js';
 
 const router = express.Router();
 
-// ⚠️ ყურადღება: აქ უნდა ჩასვა ახალი Flitt-ის გასაღებები (შენი ძველი TBC-ის პაროლები შეიძლება არ წავიდეს)
-const FLITT_SECRET = '5PXzRQNR5xTiEcaK8F3LHcmmERLortie'; // საიდუმლო გასაღები Flitt პორტალიდან
-const FLITT_MERCHANT_ID = 4055847; // შენი Merchant ID (ციფრები, რაც Flitt-ზე გაქვს)
+const FLITT_SECRET = 'შენი_FLITT_SECRET_KEY'; // ჩასვი შენი ახალი პაროლი
+const FLITT_MERCHANT_ID = 1549901; // ჩასვი შენი ახალი ID
 
-// 1. გადახდის ლინკის შექმნა (ახალი Flitt API ლოგიკით)
 router.post('/tbc/create/:id', async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
         if (!order) return res.status(404).json({ message: "შეკვეთა ვერ მოიძებნა" });
 
-        // ❗️მნიშვნელოვანია: Flitt თანხას კითხულობს თეთრებში/ცენტებში (მთელი რიცხვი). 
-        // მაგალითად: 15.50 ლარი უნდა გაიგზავნოს როგორც 1550
         const amountInTetri = Math.round(order.totalPrice * 100);
 
-        // ვაგროვებთ მონაცემებს ობიექტში
+        // 1. ვაგროვებთ ყველა საჭირო პარამეტრს
         const requestData = {
             amount: amountInTetri,
             currency: "GEL",
             merchant_id: FLITT_MERCHANT_ID,
-            order_desc: "შეკვეთა საიტიდან", 
-            order_id: order._id.toString() // ვიყენებთ მონგოს ID-ს შეკვეთის ნომრად
+            order_desc: "Website Order",  // 👈 შევცვალეთ ინგლისურით სტაბილურობისთვის
+            order_id: order._id.toString(),
+            response_url: `https://ntstyle.ge/order/${order._id}`, // 👈 მომხმარებლის დასაბრუნებელი ლინკი
+            server_callback_url: `https://ntstyle-api.onrender.com/api/payments/callback` // 👈 სერვერის ვებჰუკი
         };
 
-        // ვქმნით Signature-ს (ხელმოწერას)
-        const sortedKeys = Object.keys(requestData).sort(); // ვალაგებთ გასაღებებს ანბანურად
-        const valuesToHash = [FLITT_SECRET, ...sortedKeys.map(key => requestData[key])];
-        const signatureString = valuesToHash.join('|'); // ვაერთებთ | სიმბოლოთი
-        
-        // ვამატებთ ჰეშირებულ signature-ს ჩვენს ობიექტში
-        requestData.signature = crypto.createHash('sha1').update(signatureString).digest('hex');
+        // 2. ვქმნით Signature-ს
+        const sortedKeys = Object.keys(requestData).sort(); 
+        const valuesToHash = [FLITT_SECRET.trim()]; // .trim() აშორებს უჩინარ სფეისებს
 
-        // ვაგზავნით მოთხოვნას პირდაპირ Flitt-ის სერვერზე
+        for (let key of sortedKeys) {
+            // Flitt-ის მოთხოვნა: ცარიელი ველები არ უნდა მოხვდეს ჰეშში
+            if (requestData[key] !== '' && requestData[key] !== null) {
+                valuesToHash.push(String(requestData[key]).trim());
+            }
+        }
+
+        const signatureString = valuesToHash.join('|');
+        
+        // ლოგებში ვბეჭდავთ, რომ ზუსტად დავინახოთ რას ვაჰეშებთ
+        console.log("📝 სტრინგი, რომელიც იჰეშება:", signatureString);
+
+        // ჰეშის გენერაცია (აუცილებლად lowercase, რასაც .digest('hex') ისედაც შვება)
+        requestData.signature = crypto.createHash('sha1').update(signatureString, 'utf8').digest('hex');
+        console.log("🔐 დაგენერირებული ჰეში:", requestData.signature);
+
+        // 3. ვაგზავნით მოთხოვნას
         const response = await axios.post('https://pay.flitt.com/api/checkout/url', {
             request: requestData
         }, {
@@ -45,14 +55,13 @@ router.post('/tbc/create/:id', async (req, res) => {
             }
         });
 
-        // ვიღებთ გადახდის ლინკს პასუხიდან
         const checkoutUrl = response.data?.response?.checkout_url;
         
         if (checkoutUrl) {
             res.json({ checkout_url: checkoutUrl });
         } else {
             console.error("❌ ბანკის პასუხი ერორით:", response.data);
-            res.status(400).json({ detail: "ბანკმა გადახდის ბმული არ დააბრუნა" });
+            res.status(400).json({ detail: "ბანკმა გადახდის ბმული არ დააბრუნა", flitt_error: response.data });
         }
 
     } catch (error) {
@@ -61,13 +70,9 @@ router.post('/tbc/create/:id', async (req, res) => {
     }
 });
 
-// 2. Callback - აქ მოვა ინფორმაცია Flitt-დან (წარმატებული/წარუმატებელი)
+// Callback ლოგიკა იგივე რჩება...
 router.post('/callback', async (req, res) => {
     console.log("🔔 Flitt Callback მოვიდა:", req.body);
-    
-    // TODO: აქ ამოიღებ order_id-ს და სტატუსს req.body-დან 
-    // და გაანახლებ ბაზაში (მაგ: await Order.findByIdAndUpdate(..., { isPaid: true }))
-
     res.status(200).send('OK');
 });
 
