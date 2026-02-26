@@ -1,7 +1,7 @@
+JavaScript
 import express from 'express';
 import User from '../models/UserModel.js';
 import generateToken from '../utils/generateToken.js';
-// 1. 👇 დავაიმპორტოთ მეილის გაგზავნის ფუნქცია utils ფოლდერიდან
 import { sendWelcomeEmail } from '../utils/sendWelcomeEmail.js'; 
 
 const router = express.Router();
@@ -41,15 +41,12 @@ router.post('/', async (req, res) => {
         const user = await User.create({ name, email, password });
 
         if (user) {
-            // DEBUG 2: ვამოწმებთ, მივიდა თუ არა კოდი აქამდე
-            console.log("--- User Created Successfully, calling Email function ---");
+            // წარმატებული რეგისტრაციის შეტყობინება კონსოლში
+            console.log("👤 მომხმარებელი შეიქმნა:", user.email);
 
-            // გამოვიძახოთ ფუნქცია
-            sendWelcomeEmail(user.email, user.name)
-                .then(() => console.log("✅ SendWelcomeEmail Promise Resolved"))
-                .catch((err) => console.error("❌ SendWelcomeEmail Promise Rejected:", err));
+            // 📩 მეილის გაგზავნა (ფონურ რეჟიმში)
+            sendWelcomeEmail(user.email, user.name);
 
-            // პასუხი ფრონტს
             res.status(201).json({ 
                 _id: user._id,
                 name: user.name,

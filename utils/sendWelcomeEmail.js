@@ -1,33 +1,39 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// .env-ში აუცილებლად უნდა გქონდეს RESEND_API_KEY
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const sendWelcomeEmail = async (userEmail, userName) => {
-    //  DEBUG 1: ვამოწმებთ, საერთოდ შემოდის თუ არა აქ
-    console.log("--- Email Debug: Function Started ---");
-    console.log("Sending to:", userEmail);
-
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-    });
-
-    const htmlTemplate = `<h1>მოგესალმებით, ${userName}!</h1><p>თქვენ წარმატებით დარეგისტრირდით N.T.Style-ზე.</p>`;
-
-    const mailOptions = {
-        from: `"N.T.Style" <${process.env.EMAIL_USER}>`,
-        to: userEmail,
-        subject: `წარმატებული რეგისტრაცია 🎉`,
-        html: htmlTemplate,
-    };
-
     try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log("✅ Email Sent Success:", info.response);
-        return info;
-    } catch (error) {
-        console.error("❌ Nodemailer Error Inside Function:", error);
-        throw error;
+        console.log("🚀 Resend-ით მეილის გაგზავნა დაიწყო...");
+
+        const { data, error } = await resend.emails.send({
+            from: 'N.T.Style <onboarding@resend.dev>', // სანამ დომენს არ დააკავშირებ, დატოვე onboarding@resend.dev
+            to: [userEmail],
+            subject: 'მოგესალმებით N.T.Style-ში! 🎉',
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee;">
+                    <h2 style="color: #000;">გამარჯობა ${userName}!</h2>
+                    <p>თქვენ წარმატებით დარეგისტრირდით ჩვენს პლატფორმაზე.</p>
+                    <p>მოხარულები ვართ, რომ შემოგვიერთდით.</p>
+                    <br>
+                    <a href="https://ntstyle.ge" style="background: black; color: white; padding: 10px 20px; text-decoration: none;">საიტზე გადასვლა</a>
+                </div>
+            `,
+        });
+
+        if (error) {
+            console.error("❌ Resend-ის შეცდომა:", error);
+            return { success: false, error };
+        }
+
+        console.log("✅ მეილი გაიგზავნა წარმატებით! ID:", data.id);
+        return { success: true, data };
+    } catch (err) {
+        console.error("❌ სისტემური შეცდომა გაგზავნისას:", err);
+        return { success: false, error: err.message };
     }
 };
