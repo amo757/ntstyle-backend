@@ -7,9 +7,9 @@ router.post('/create-payment', async (req, res) => {
     try {
         const { orderId, amount } = req.body;
         
-        // ⚠️ მონაცემები მივუთითეთ პირდაპირ (Hardcoded), რადგან ამან Postman-ში 100% იმუშავა
-        const merchantId = 4055847; 
-        const secretKey = "aAvS5nigREZqTHxTbx4ELhjXwtaRe8sy"; // 👈 ნამდვილი, სწორი გასაღები!
+        // ⚠️ მონაცემები მივუთითეთ პირდაპირ (Hardcoded)
+        const merchantId = "4055847"; // 👈 გავხადეთ ტექსტი (სტრინგი)
+        const secretKey = "aAvS5nigREZqTHxTbx4ELhjXwtaRe8sy"; 
 
         // თანხის გადაყვანა თეთრებში (Flitt ყოველთვის თეთრებში ითხოვს)
         const flittAmount = Math.round(amount * 100);
@@ -34,9 +34,11 @@ router.post('/create-payment', async (req, res) => {
             }
         }
 
+        // ხელმოწერის გენერაცია SHA1-ით
         const signature = crypto.createHash('sha1').update(signString, 'utf8').digest('hex').toLowerCase();
         requestData.signature = signature;
 
+        // ვაგზავნით მოთხოვნას Flitt-ში
         const response = await fetch('https://pay.flitt.com/api/checkout/url', {
             method: 'POST',
             headers: {
@@ -47,6 +49,7 @@ router.post('/create-payment', async (req, res) => {
 
         const data = await response.json();
 
+        // ვამოწმებთ პასუხს
         if (data.response && data.response.response_status === 'success') {
             res.status(200).json({
                 success: true,
@@ -54,8 +57,7 @@ router.post('/create-payment', async (req, res) => {
                 paymentId: data.response.payment_id
             });
         } else {
-            console.error("❌ Flitt API-მ დაიწუნა მოთხოვნა. დეტალები:", JSON.stringify(data, null, 2));
-            console.log("🔍 დასაშიფრი სტრინგი იყო:", signString);
+            console.error("❌ Flitt API Error:", JSON.stringify(data, null, 2));
             res.status(400).json({ success: false, message: "ვერ მოხერხდა გადახდის ლინკის გენერაცია", details: data });
         }
 
