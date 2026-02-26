@@ -1,4 +1,3 @@
-JavaScript
 import express from 'express';
 import User from '../models/UserModel.js';
 import generateToken from '../utils/generateToken.js';
@@ -28,7 +27,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// @route   POST /api/users
+// @route   POST /api/users (რეგისტრაცია)
 router.post('/', async (req, res) => {
     const { name, email, password } = req.body;
     
@@ -41,11 +40,14 @@ router.post('/', async (req, res) => {
         const user = await User.create({ name, email, password });
 
         if (user) {
-            // წარმატებული რეგისტრაციის შეტყობინება კონსოლში
-            console.log("👤 მომხმარებელი შეიქმნა:", user.email);
+            console.log("👤 მომხმარებელი შეიქმნა, იწყება მეილის პროცესი...");
 
-            // 📩 მეილის გაგზავნა (ფონურ რეჟიმში)
-            sendWelcomeEmail(user.email, user.name);
+            // 📩 მეილის გაგზავნა (გამოვიყენოთ await, რომ დაველოდოთ პროცესს)
+            try {
+                await sendWelcomeEmail(user.email, user.name);
+            } catch (mailError) {
+                console.error("⚠️ მეილი ვერ გაიგზავნა, თუმცა იუზერი შეიქმნა:", mailError.message);
+            }
 
             res.status(201).json({ 
                 _id: user._id,
@@ -67,20 +69,13 @@ router.post('/', async (req, res) => {
 // 2. WISHLIST
 // -------------------------------------------------------------------------
 
-// @route   PUT /api/users/wishlist
-// @desc    Add or Remove item (Toggle)
 router.put('/wishlist', async (req, res) => {
     const { userId, productId } = req.body;
-
     try {
         const user = await User.findById(userId);
-        
-        if (!user) {
-            return res.status(404).json({ message: "მომხმარებელი ვერ მოიძებნა" });
-        }
+        if (!user) return res.status(404).json({ message: "მომხმარებელი ვერ მოიძებნა" });
 
         const alreadyAdded = user.wishlist.some(id => id.toString() === productId);
-
         if (alreadyAdded) {
             user.wishlist = user.wishlist.filter(id => id.toString() !== productId);
         } else {
@@ -88,30 +83,19 @@ router.put('/wishlist', async (req, res) => {
         }
 
         await user.save();
-
         const updatedUser = await User.findById(userId).populate('wishlist');
-        
         res.json(updatedUser.wishlist);
-
     } catch (error) {
-        console.error("Wishlist Update Error:", error);
         res.status(500).json({ message: "სერვერის შეცდომა ვიშლისტის განახლებისას" });
     }
 });
 
-// @route   GET /api/users/:id/wishlist
-// @desc    Get user wishlist
 router.get('/:id/wishlist', async (req, res) => {
     try {
         const user = await User.findById(req.params.id).populate('wishlist');
-        
-        if (user) {
-            res.json(user.wishlist);
-        } else {
-            res.status(404).json({ message: "მომხმარებელი ვერ მოიძებნა" });
-        }
+        if (user) res.json(user.wishlist);
+        else res.status(404).json({ message: "მომხმარებელი ვერ მოიძებნა" });
     } catch (error) {
-        console.error("Wishlist Fetch Error:", error);
         res.status(500).json({ message: "ვერ მოხერხდა ვიშლისტის წამოღება" });
     }
 });
