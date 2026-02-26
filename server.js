@@ -126,7 +126,7 @@ app.get('/test-email', async (req, res) => {
 // 5. როუტერების ჩართვა
 // ---------------------------------------------------------
 app.use('/api/products', productRoutes);
-app.use('/api/payments', paymentRoutes);
+app.use('/api/payment', paymentRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/orders', orderRoutes);
