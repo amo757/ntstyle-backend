@@ -4,12 +4,12 @@ const productSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        unique: true,
+        // unique: true,
     },
     slug: { 
         type: String,
         required: true,
-        unique: true,
+        // unique: true,
     },
     price: {
         type: Number,
@@ -30,12 +30,16 @@ const productSchema = new mongoose.Schema({
     designer: { 
         type: String,
     },
-    images: [
-        {
-            type: String,
-            required: true,
-        },
-    ],
+    // სურათების მასივი: ["url1", "url2", ...]
+    images: {
+        type: [String],
+        required: true,
+    },
+    // ✅ დამატებული ზომები ფილტრაციისთვის: ["S", "M", "L", ...]
+    sizes: {
+        type: [String],
+        default: [],
+    },
     colors: [
         {
             name: { type: String, required: true }, 
@@ -57,4 +61,4 @@ const productSchema = new mongoose.Schema({
 
 const Product = mongoose.model('Product', productSchema);
 
-export default Product; // <--- მთავარია ეს ხაზი იყოს, და ყველაფერი იმუშავებს!
+export default Product;
