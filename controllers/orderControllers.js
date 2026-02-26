@@ -126,7 +126,7 @@ const addOrderItems = asyncHandler(async (req, res) => {
               <h3>ჯამური თანხა: ${totalPrice} GEL</h3>
               <p><strong>გადახდის მეთოდი:</strong> ${paymentMethod}</p>
               <br/>
-              <a href="https://ntstyle.ge/order/${createdOrder._id}" style="display: inline-block; background: #000; color: #fff; padding: 10px 20px; text-decoration: none;">ადმინ პანელში ნახვა</a>
+              
             </div>
           </div>
         `
