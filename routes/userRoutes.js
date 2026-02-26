@@ -1,6 +1,8 @@
 import express from 'express';
 import User from '../models/UserModel.js';
-import generateToken from '../utils/generateToken.js'; // სტანდარტული იმპორტი ჯობია
+import generateToken from '../utils/generateToken.js';
+// 1. 👇 დავაიმპორტოთ მეილის გაგზავნის ფუნქცია utils ფოლდერიდან
+import { sendWelcomeEmail } from '../utils/sendWelcomeEmail.js'; 
 
 const router = express.Router();
 
@@ -47,6 +49,12 @@ router.post('/', async (req, res) => {
                 isAdmin: user.isAdmin,
                 token: generateToken(user._id),
             });
+
+            // 2. 👇 აქ ვიძახებთ მეილის გაგზავნის ფუნქციას ფონურად
+            sendWelcomeEmail(user.email, user.name)
+                .then(() => console.log(`✅ Welcome email sent to: ${user.email}`))
+                .catch((err) => console.error("❌ Email Error:", err.message));
+
         } else {
             res.status(400).json({ message: 'არასწორი მომხმარებლის მონაცემები' });
         }
@@ -57,7 +65,7 @@ router.post('/', async (req, res) => {
 });
 
 // -------------------------------------------------------------------------
-// 2. WISHLIST (შესწორებული და გამართული)
+// 2. WISHLIST
 // -------------------------------------------------------------------------
 
 // @route   PUT /api/users/wishlist
@@ -72,20 +80,16 @@ router.put('/wishlist', async (req, res) => {
             return res.status(404).json({ message: "მომხმარებელი ვერ მოიძებნა" });
         }
 
-        // ✅ შესწორება: ვამოწმებთ String-ად გადაყვანილ ID-ებს (უფრო საიმედოა)
         const alreadyAdded = user.wishlist.some(id => id.toString() === productId);
 
         if (alreadyAdded) {
-            // თუ არის - ამოშალოს
             user.wishlist = user.wishlist.filter(id => id.toString() !== productId);
         } else {
-            // თუ არ არის - დაამატოს
             user.wishlist.push(productId);
         }
 
         await user.save();
 
-        // ვაბრუნებთ დასურათებულ (Populated) სიას
         const updatedUser = await User.findById(userId).populate('wishlist');
         
         res.json(updatedUser.wishlist);
@@ -100,7 +104,6 @@ router.put('/wishlist', async (req, res) => {
 // @desc    Get user wishlist
 router.get('/:id/wishlist', async (req, res) => {
     try {
-        // მნიშვნელოვანია .populate('wishlist'), რომ ფრონტმა მიიღოს ფოტო და ფასი
         const user = await User.findById(req.params.id).populate('wishlist');
         
         if (user) {
