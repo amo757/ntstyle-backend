@@ -33,7 +33,6 @@ router.post('/', async (req, res) => {
     const { name, email, password } = req.body;
     
     const userExists = await User.findOne({ email });
-
     if (userExists) {
         return res.status(400).json({ message: 'მომხმარებელი ამ ელ. ფოსტით უკვე არსებობს' });
     }
@@ -42,6 +41,15 @@ router.post('/', async (req, res) => {
         const user = await User.create({ name, email, password });
 
         if (user) {
+            // DEBUG 2: ვამოწმებთ, მივიდა თუ არა კოდი აქამდე
+            console.log("--- User Created Successfully, calling Email function ---");
+
+            // გამოვიძახოთ ფუნქცია
+            sendWelcomeEmail(user.email, user.name)
+                .then(() => console.log("✅ SendWelcomeEmail Promise Resolved"))
+                .catch((err) => console.error("❌ SendWelcomeEmail Promise Rejected:", err));
+
+            // პასუხი ფრონტს
             res.status(201).json({ 
                 _id: user._id,
                 name: user.name,
@@ -49,12 +57,6 @@ router.post('/', async (req, res) => {
                 isAdmin: user.isAdmin,
                 token: generateToken(user._id),
             });
-
-            // 2. 👇 აქ ვიძახებთ მეილის გაგზავნის ფუნქციას ფონურად
-            sendWelcomeEmail(user.email, user.name)
-                .then(() => console.log(`✅ Welcome email sent to: ${user.email}`))
-                .catch((err) => console.error("❌ Email Error:", err.message));
-
         } else {
             res.status(400).json({ message: 'არასწორი მომხმარებლის მონაცემები' });
         }
