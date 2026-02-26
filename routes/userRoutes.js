@@ -5,11 +5,7 @@ import { sendWelcomeEmail } from '../utils/sendWelcomeEmail.js';
 
 const router = express.Router();
 
-// -------------------------------------------------------------------------
-// 1. LOGIN & REGISTER
-// -------------------------------------------------------------------------
-
-// @route   POST /api/users/login
+// --- LOGIN ---
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
@@ -27,7 +23,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// @route   POST /api/users (რეგისტრაცია)
+// --- REGISTER (აქ ხდება მეილის გამოძახება) ---
 router.post('/', async (req, res) => {
     const { name, email, password } = req.body;
     
@@ -40,14 +36,12 @@ router.post('/', async (req, res) => {
         const user = await User.create({ name, email, password });
 
         if (user) {
-            console.log("👤 მომხმარებელი შეიქმნა, იწყება მეილის პროცესი...");
+            console.log("👤 მომხმარებელი შეიქმნა, ვაგზავნით მეილს...");
 
-            // 📩 მეილის გაგზავნა (გამოვიყენოთ await, რომ დაველოდოთ პროცესს)
-            try {
-                await sendWelcomeEmail(user.email, user.name);
-            } catch (mailError) {
-                console.error("⚠️ მეილი ვერ გაიგზავნა, თუმცა იუზერი შეიქმნა:", mailError.message);
-            }
+            // 📩 მეილის გაგზავნა (ფონურად, await-ის გარეშე, რომ მომხმარებელი არ ალოდინოს)
+            sendWelcomeEmail(user.email, user.name)
+                .then(() => console.log(`Email task finished for ${user.email}`))
+                .catch(err => console.error("Email task failed", err));
 
             res.status(201).json({ 
                 _id: user._id,
@@ -65,10 +59,7 @@ router.post('/', async (req, res) => {
     }
 });
 
-// -------------------------------------------------------------------------
-// 2. WISHLIST
-// -------------------------------------------------------------------------
-
+// --- WISHLIST ---
 router.put('/wishlist', async (req, res) => {
     const { userId, productId } = req.body;
     try {
