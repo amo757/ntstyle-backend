@@ -21,12 +21,18 @@ const userSchema = new mongoose.Schema({
         required: true,
         default: false,
     },
+    // 👇 აქ ვამატებთ ახალ ველს პრომო კოდისთვის
+    hasUsedWelcomePromo: {
+        type: Boolean,
+        required: true,
+        default: false,
+    },
     wishlist: [
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: 'Product' 
-            }
-        ]
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Product' 
+        }
+    ]
 }, {
     timestamps: true,
 });
