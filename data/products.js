@@ -42,6 +42,18 @@ const products = [
         images: ['/clothes/5.jpg', '/clothes/6.jpg'],
         countInStock: 2,
         isFeatured: true
+    },
+    {
+        name: 'Crystal-embellished Gown201',
+        slug: 'crystal-gown201',
+        price: 3,
+        sizes: ["XS", "S"], // 👈 დაამატე ზომები ყველგან
+        description: 'ბრწყინვალე კაბა1.',
+        category: 'clothing',
+        designer: 'Natia Tkhelidze',
+        images: ['/clothes/5.jpg', '/clothes/6.jpg'],
+        countInStock: 2,
+        isFeatured: true
     }
 ];
 

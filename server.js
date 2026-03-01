@@ -135,7 +135,9 @@ app.use('/api/orders', orderRoutes);
 app.get('/', (req, res) => {
   res.send('API is running... 🟢');
 });
-
+app.get('/ping', (req, res) => {
+    res.status(200).send('Server is awake and running!');
+});
 // ---------------------------------------------------------
 // 6. Socket.io და სერვერის გაშვება
 // ---------------------------------------------------------
