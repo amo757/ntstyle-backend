@@ -16,6 +16,7 @@ router.post('/login', async (req, res) => {
             name: user.name,
             email: user.email,
             isAdmin: user.isAdmin,
+            hasUsedWelcomePromo: user.hasUsedWelcomePromo, // 👈 დაემატა ეს ხაზი
             token: generateToken(user._id),
         });
     } else {
@@ -48,6 +49,7 @@ router.post('/', async (req, res) => {
                 name: user.name,
                 email: user.email,
                 isAdmin: user.isAdmin,
+                hasUsedWelcomePromo: user.hasUsedWelcomePromo, // 👈 დაემატა ეს ხაზი
                 token: generateToken(user._id),
             });
         } else {
