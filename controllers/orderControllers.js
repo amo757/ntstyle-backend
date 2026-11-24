@@ -1,6 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import Order from '../models/orderModel.js';
-import { Resend } from 'resend'; 
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -110,7 +110,7 @@ const addOrderItems = asyncHandler(async (req, res) => {
       // 📧 ბ) წერილი ადმინისთვის
       await resend.emails.send({
         from: 'System <info@ntstyle.ge>',
-        to: ['amiamo757@gmail.com'], 
+        to: ['amiamo757@gmail.com'],
         subject: `🚨 ახალი შეკვეთა! #${createdOrder._id} - ${customerName}`,
         html: `
           <div style="font-family: sans-serif; padding: 20px; background: #f4f4f4;">
@@ -126,23 +126,23 @@ const addOrderItems = asyncHandler(async (req, res) => {
               <h4>📦 პროდუქტები:</h4>
               <table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
                 <thead>
-                  <tr style="background: #eee;">
-                    <th>პროდუქტი</th>
-                    <th>ID</th>
-                    <th>ზომა / რაოდ.</th>
-                    <th>ფასი</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${orderItems.map(item => `
-                    <tr>
-                      <td>${item.name}</td>
-                      <td><small>${item.product}</small></td>
-                      <td>${item.size || 'N/A'} / ${item.qty || item.quantity || 1}</td>
-                      <td>${item.price} GEL</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
+  <tr style="background: #eee;">
+    <th>პროდუქტი</th>
+    <th>კოდი (Slug)</th>  
+    <th>ზომა / რაოდ.</th>
+    <th>ფასი</th>
+  </tr>
+</thead>
+<tbody>
+  ${orderItems.map(item => `
+    <tr>
+      <td>${item.name}</td>
+      <td><strong>${item.slug || item.product}</strong></td>
+      <td>${item.size || 'N/A'} / ${item.qty || item.quantity || 1}</td>
+      <td>${item.price} GEL</td>
+    </tr>
+  `).join('')}
+</tbody>
               </table>
               <h3>ჯამური თანხა: ${totalPrice} GEL</h3>
               <p><strong>გადახდის მეთოდი:</strong> ${paymentMethod}</p>
