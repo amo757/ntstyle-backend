@@ -8,7 +8,7 @@ router.post('/create-payment', async (req, res) => {
         const { orderId, amount } = req.body;
         
         // ⚠️ მონაცემები მივუთითეთ პირდაპირ (Hardcoded)
-        const merchantId = "4055847"; // 👈 გავხადეთ ტექსტი (სტრინგი)
+        const merchantId = "4055847";
         const secretKey = "aAvS5nigREZqTHxTbx4ELhjXwtaRe8sy"; 
 
         // თანხის გადაყვანა თეთრებში (Flitt ყოველთვის თეთრებში ითხოვს)
@@ -20,7 +20,8 @@ router.post('/create-payment', async (req, res) => {
             merchant_id: merchantId,
             order_desc: "Order_" + orderId, 
             order_id: orderId.toString(),
-            response_url: "https://ntstyle.ge/order/" + orderId,
+            // ✅ Flitt-იდან ჯერ ბექენდზე დაბრუნდება POST-ით, ბექენდი კი GET-ით გადაამისამართებს საიტზე
+            response_url: "https://ntstyle-api.onrender.com/api/payment/flitt-redirect/" + orderId,
             // ბანკი აქ ფარულად გამოაგზავნის სტატუსს გადახდის მერე
             server_callback_url: "https://ntstyle-api.onrender.com/api/payment/callback"
         };
@@ -65,6 +66,12 @@ router.post('/create-payment', async (req, res) => {
         console.error("❌ Server Error in /create-payment:", error);
         res.status(500).json({ success: false, message: "სერვერის შიდა შეცდომა", error: error.message });
     }
+});
+
+// ✅ ახალი როუტი: Flitt-ის POST მოთხოვნას გადააქცევს GET-ად და აბრუნებს საიტზე
+router.all('/flitt-redirect/:orderId', (req, res) => {
+    const { orderId } = req.params;
+    res.redirect(303, `https://ntstyle.ge/order/${orderId}`);
 });
 
 export default router;

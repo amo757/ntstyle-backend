@@ -7,7 +7,7 @@ const products = [
             { name: "orange", hex: "#e67d15" },
         ],
         sizes: ["S", "M", "L"], // 👈 აუცილებელია ფილტრისთვის
-        price: 3,
+        price: 2,
         description: 'სატესტო3',
         category: 'clothing',
         designer: 'Natia Tkhelidze',
