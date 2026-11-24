@@ -2,7 +2,7 @@ const products = [
 
  {
         name: 'სატესტო1',
-        slug: 'სატესტო2',
+        slug: 'NT-001',
         colors: [
             { name: "orange", hex: "#e67d15" },
         ],
@@ -18,7 +18,7 @@ const products = [
 
     {
         name: 'კოსტუმი მაკრამით',
-        slug: 'კოსტუმი მაკრამით',
+        slug: 'NT-002',
         colors: [
             { name: "black", hex: "#020100" },
         ],
@@ -33,7 +33,7 @@ const products = [
     },
     {
         name: 'ორეული თეთრი ვარდით',
-        slug: 'ორეული თეთრი ვარდით',
+        slug: 'NT-003',
         colors: [
             { name: "black", hex: "#020100" },
         ],
@@ -48,7 +48,7 @@ const products = [
     },
      {
         name: 'პლაში',
-        slug: 'პლაში',
+        slug: 'NT-004',
         colors: [
             { name: "beige", hex: "#c2af7d" },
             { name: "black", hex: "#030200" }

@@ -22,6 +22,7 @@ shippingSchema.pre('validate', function (next) {
 
 const orderItemSchema = mongoose.Schema({
     name: { type: String, required: true },
+    slug: { type: String }, // 👈 პროდუქტის კოდი (SKU)
     quantity: { type: Number, required: true },
     image: { type: String },
     price: { type: Number, required: true },
