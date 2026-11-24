@@ -6,7 +6,18 @@ const shippingSchema = mongoose.Schema({
     city: { type: String, required: true },
     postalCode: { type: String },
     country: { type: String, required: true, default: 'Georgia' },
-    phoneNumber: { type: String, required: true },
+    phoneNumber: { type: String },
+    phone: { type: String },
+});
+
+// შენახვამდე ავტომატურად შეავსოს ორივე ველი, რომლის სახელითაც არ უნდა მოვიდეს
+shippingSchema.pre('validate', function (next) {
+    if (this.phoneNumber && !this.phone) {
+        this.phone = this.phoneNumber;
+    } else if (this.phone && !this.phoneNumber) {
+        this.phoneNumber = this.phone;
+    }
+    next();
 });
 
 const orderItemSchema = mongoose.Schema({
@@ -19,7 +30,6 @@ const orderItemSchema = mongoose.Schema({
         ref: 'Product',
         required: true,
     },
-    // დამატებითი ატრიბუტები
     size: { type: String },
     color: { type: String }
 });
@@ -28,11 +38,11 @@ const orderSchema = mongoose.Schema(
     {
         user: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'User', // ვის ეკუთვნის შეკვეთა (მთელი პროფილი)
+            ref: 'User',
             required: true,
         },
-        orderItems: [orderItemSchema], // შეძენილი ნივთების სია
-        shippingAddress: shippingSchema, // მიწოდების დეტალები
+        orderItems: [orderItemSchema],
+        shippingAddress: shippingSchema,
         paymentMethod: { type: String, required: true },
         itemsPrice: { type: Number, required: true, default: 0.0 },
         shippingPrice: { type: Number, required: true, default: 0.0 },

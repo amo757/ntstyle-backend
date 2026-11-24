@@ -29,7 +29,9 @@ const allowedOrigins = [
   'https://ntstyle.ge',       // შენი მთავარი დომენი
   'https://www.ntstyle.ge',   // www ვერსია
   'http://localhost:5173',    // შენი ლოკალური React
+  'http://127.0.0.1:5173',    // 👈 დაამატე ეს ხაზი!
   'http://localhost:5174',    // რეზერვი
+  'http://127.0.0.1:5174',    // 👈 რეზერვი IP-ით
   'https://ntstyle-api.onrender.com' // API (საკუთარი თავი)
 ];
 

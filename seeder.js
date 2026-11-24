@@ -8,16 +8,16 @@ dotenv.config();
 
 // სადებაგო კოდი - ვნახოთ რას ხედავს
 console.log("Checking .env file...");
-console.log("MONGO_URI is:", process.env.MONGO_URI ? "FOUND" : "NOT FOUND (UNDEFINED)");
+console.log("MONGODB_URI is:", process.env.MONGODB_URI ? "FOUND" : "NOT FOUND (UNDEFINED)");
 
 // 2. ბაზასთან დაკავშირება
 const connectToDb = async () => {
     try {
-        const uri = process.env.MONGO_URI;
+        const uri = process.env.MONGODB_URI;
         
         // შემოწმება: თუ ლინკი არ არის, გავაჩეროთ პროგრამა და დავწეროთ შეცდომა
         if (!uri) {
-            throw new Error("MONGO_URI is missing in .env file! Please check your .env file.");
+            throw new Error("MONGODB_URI is missing in .env file! Please check your .env file.");
         }
 
         const conn = await mongoose.connect(uri);
